@@ -1,6 +1,8 @@
 # 追分
 
-一个给三名球友使用的实时台球追分网站：创建房间，扫码加入，各自在自己的手机上记分并同步查看整桌积分。
+支持双人或三人对局的实时台球追分网站：创建时选择人数，扫码加入，各自在自己的手机上记分并同步查看整桌积分。
+
+线上地址：https://zhuifen-web-lighto00o3.onrender.com
 
 技术栈：**Vue 3 + Nuxt 4 / NestJS / Socket.IO / PostgreSQL 16**。NestJS 是独立的 Node.js 后端框架，可以搭配 Vue；Nuxt 负责页面与前端开发代理，NestJS 负责房间、身份校验、计分和实时广播。
 
@@ -19,7 +21,7 @@ npm run dev
 
 1. 电脑与手机连接同一个 Wi-Fi。
 2. 在电脑终端运行 `ipconfig getifaddr en0`，或从系统网络设置获取电脑的局域网 IPv4 地址。
-3. **先在房主手机上打开 `http://电脑IP:3000`**，填写昵称并创建房间。
+3. **先在房主手机上打开 `http://电脑IP:3000`**，填写昵称，选择「三人追分」并创建房间；两人玩时选「双人追分」。
 4. 点「扫码邀请」，其他两台手机扫码进入，或打开同一地址输入六位房间号。
 5. 房主确认玩家顺序和分值。默认座位顺序为甲、乙、丙时，乙的上家是甲，甲的上家是丙。
 6. 三人加入后房主开始。乙点「犯规」，三台手机应同时显示甲 101、乙 99、丙 100。
@@ -48,6 +50,12 @@ API 启动时自动创建 `rooms` 与 `room_commands` 两张表。不会扫描�
 
 ## 已实现的规则
 
+创建时选择 2 人或 3 人，人数到齐后房主即可开局。双人局最多两人，三人局最多三人；房间创建后人数模式固定。升级前创建的房间继续按三人模式处理。
+
+双人局的另一位玩家就是对手：犯规给对手，普胜、小金、大金、黄金九均从对手收一份分值，默认分别是 1、4、7、10、4。大金仅加 10 分，黄金九仅加 4 分，不重复收分。
+
+三人局的规则如下：
+
 | 操作 | 操作玩家 | 收付对象 | 默认分值 |
 | --- | --- | --- | --- |
 | 犯规 | 扣分 | 上家加分 | 1 |
@@ -73,7 +81,7 @@ API 启动时自动创建 `rooms` 与 `room_commands` 两张表。不会扫描�
 - 积分、座位、规则、操作记录保存在数据库；在线状态仅保存在 API 进程内。
 - 身份凭证保存在浏览器本地。刷新或原设备返回房间可恢复；清除浏览器数据会丢失该身份，当前版本没有账户或跨设备身份迁移。
 
-房间表用 JSONB 保存比赛聚合，适合当前三人局；命令表负责持久化去重。未来要做排行榜和跨场统计时，可增加专用事件表和查询索引。
+房间表用 JSONB 保存比赛聚合和人数模式；命令表负责持久化去重。未来要做排行榜和跨场统计时，可增加专用事件表和查询索引。
 
 ## 开发结构
 
@@ -104,14 +112,14 @@ npm run test:integration
 npm run build
 ```
 
-集成测试需要可连接的 PostgreSQL，会创建独立随机测试房间，并在结束时仅删除自己创建的房间。覆盖三客户端广播、积分转移、并发操作、重复提交、权限、撤销、断线重连和 API 重启后的数据库恢复。
+集成测试需要可连接的 PostgreSQL，会创建独立随机测试房间，并在结束时仅删除自己创建的房间。覆盖双人及三人广播、人数限制、旧房间兼容、积分转移、并发操作、重复提交、权限、撤销、断线重连和 API 重启后的数据库恢复。
 
 ## HTTP / WebSocket 接口
 
 | 接口 | 功能 |
 | --- | --- |
 | `GET /api/health` | 数据库健康检查 |
-| `POST /api/rooms` | 创建房间：`name, initialScore, rules` |
+| `POST /api/rooms` | 创建房间：`name, playerCount, initialScore, rules`；playerCount 为 2 或 3，省略时兼容默认 3 |
 | `POST /api/rooms/:code/join` | 加入：`name, token, requestId`，token 为客户端生成的 32 字节随机十六进制串 |
 | `GET /api/rooms/:code` | 成员读取完整公开状态 |
 | `POST /api/rooms/:code/commands` | 执行 `start / configure / score / undo / end`，带 `requestId` |
@@ -122,9 +130,9 @@ Socket.IO 默认生产环境使用同域 `/socket.io/`，开发环境直连同�
 
 ## 部署边界
 
-面向国内用户，采用 [国内服务器与自动上线说明](docs/domestic.md)：GitHub Actions 检查、构建镜像，服务器准备好并开启开关后，合并到 `main` 就自动部署。免费功能验证可选 [Render + Neon 部署说明](docs/render.md)，国内访问速度需实测。尚未创建云服务。另有 [Railway 部署说明](docs/railway.md) 可选。
+目前已使用 [Render + Neon](docs/render.md) 免费套餐上线，合并到 `main` 后检查通过即自动部署，国内访问速度需实测。面向国内用户也可采用 [国内服务器与自动上线说明](docs/domestic.md)。另有 [Railway 部署说明](docs/railway.md) 可选。
 
-这是可本地运行并已准备生产部署配置的第一版，尚未发布到公网。推荐使用 [公网部署说明](docs/deployment.md) 中的 Docker Compose + Caddy：一个域名统一提供 HTTPS 页面、接口与实时连接，球友可分别使用手机流量。`Dockerfile` 包含 API / Web 两个生产镜像目标，`compose.production.yaml` 包含持久化 PostgreSQL 与自动 HTTPS 网关。
+自行购买服务器时可以使用 [公网部署说明](docs/deployment.md) 中的 Docker Compose + Caddy：一个域名统一提供 HTTPS 页面、接口与实时连接，球友可分别使用手机流量。`Dockerfile` 包含 API / Web 两个生产镜像目标，`compose.production.yaml` 包含持久化 PostgreSQL 与自动 HTTPS 网关。
 
 也可以自行管理 Node 进程。生产构建后：API 使用 `npm run start -w @zhuifen/api`；Nuxt 使用 `npm run start -w @zhuifen/web`，需要使用支持的 Node 版本。
 

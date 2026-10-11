@@ -48,10 +48,11 @@
 
 `.github/workflows/ci.yml` 检查类型、规则、真实 PostgreSQL 与三个 Socket.IO 客户端的同步，并验证 SSR 和静态构建。仓库内 `render.yaml` 保留 `autoDeployTrigger: checksPass` 的 Blueprint 配置，但不会自动修改已通过连接工具创建的服务。完成以上配置后，无需在 GitHub Actions 存部署令牌。
 
-线上 API 部署完成后，可以运行以下检查。它创建一个三人测试房间，确认所有客户端收到 `101 / 99 / 100` 的比分，并在结束时关闭测试房间：
+线上 API 部署完成后，可以分别运行双人和三人检查。它创建对应人数的测试房间，确认所有客户端收到 `101 / 99` 或 `101 / 99 / 100` 的比分，并在结束时关闭测试房间：
 
 ```bash
-node scripts/verify-live.mjs https://zhuifen-api-lighto00o3.onrender.com
+node scripts/verify-live.mjs https://zhuifen-api-lighto00o3.onrender.com 2
+node scripts/verify-live.mjs https://zhuifen-api-lighto00o3.onrender.com 3
 ```
 
 ## 免费方案的边界

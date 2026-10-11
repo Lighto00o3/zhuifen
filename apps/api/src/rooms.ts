@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { Database } from './database';
-import { DEFAULT_RULES, LABELS, Member, RoomState, Rules, ScoreKind, scoreDeltas } from './model';
+import { DEFAULT_RULES, LABELS, Member, PlayerCount, RoomState, Rules, ScoreKind, scoreDeltas } from './model';
 
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new BadRequestException('请求格式不正确');
@@ -20,6 +20,15 @@ function uuid(value: unknown): string {
   return value;
 }
 const hash = (token: string) => createHash('sha256').update(token).digest('hex');
+function playerCount(value: unknown): PlayerCount {
+  if (value === undefined) return 3;
+  if (value !== 2 && value !== 3) throw new BadRequestException('追分人数只能选择 2 人或 3 人');
+  return value;
+}
+// 已有房间没有人数字段，继续按原来的三人模式读取与处理。
+function restoreState(value: RoomState): RoomState {
+  return { ...value, playerCount: value.playerCount ?? 3 };
+}
 function member(nickname: unknown): { member: Member; token: string } {
   const token = randomBytes(32).toString('hex');
   return { member: { id: randomUUID(), name: name(nickname), tokenHash: hash(token), score: 0 }, token };
@@ -46,17 +55,18 @@ export class Rooms {
     this.validateCode(code);
     const result = await this.db.pool.query('SELECT state FROM rooms WHERE code=$1', [code]);
     if (!result.rows[0]) throw new NotFoundException('房间不存在，请检查房间号');
-    return result.rows[0].state;
+    return restoreState(result.rows[0].state);
   }
   async create(body: unknown) {
     const data = object(body);
     const owner = member(data.name);
     const config = settings(data);
+    const capacity = playerCount(data.playerCount);
     owner.member.score = config.initialScore;
     for (let attempt = 0; attempt < 8; attempt++) {
       const code = String(randomInt(100000, 1000000));
       const state: RoomState = { code, hostId: owner.member.id, status: 'waiting', version: 1,
-        ...config, members: [owner.member], events: [], createdAt: new Date().toISOString() };
+        ...config, playerCount: capacity, members: [owner.member], events: [], createdAt: new Date().toISOString() };
       const result = await this.db.pool.query('INSERT INTO rooms(code,state) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING code', [code, state]);
       if (result.rowCount) return { state, session: { code, playerId: owner.member.id, token: owner.token } };
     }
@@ -75,7 +85,7 @@ export class Rooms {
       const existing = state.members.find(item => item.tokenHash === newcomer.member.tokenHash);
       if (existing) { newcomer.member = existing; return false; }
       if (state.status !== 'waiting') throw new ConflictException('比赛已开始，请使用原来的设备恢复');
-      if (state.members.length >= 3) throw new ConflictException('三人房间已满');
+      if (state.members.length >= state.playerCount) throw new ConflictException(`${state.playerCount === 2 ? '双人' : '三人'}房间已满`);
       if (state.members.some(item => item.name === newcomer.member.name)) throw new ConflictException('这个昵称已被使用，请换一个');
       newcomer.member.score = state.initialScore;
       state.members.push(newcomer.member);
@@ -89,7 +99,7 @@ export class Rooms {
       await client.query('BEGIN');
       const result = await client.query('SELECT state FROM rooms WHERE code=$1 FOR UPDATE', [code]);
       if (!result.rows[0]) throw new NotFoundException('房间不存在');
-      const state: RoomState = result.rows[0].state;
+      const state = restoreState(result.rows[0].state);
       if (await update(state, client)) {
         state.version++;
         await client.query('UPDATE rooms SET state=$2,updated_at=now() WHERE code=$1', [code, state]);
@@ -116,7 +126,7 @@ export class Rooms {
       switch (data.type) {
         case 'start':
           hostOnly();
-          if (state.status !== 'waiting' || state.members.length !== 3) throw new ConflictException('需要三人加入后再开始');
+          if (state.status !== 'waiting' || state.members.length !== state.playerCount) throw new ConflictException(`需要 ${state.playerCount} 人加入后再开始`);
           state.status = 'playing'; state.startedAt = new Date().toISOString();
           break;
         case 'configure': {
