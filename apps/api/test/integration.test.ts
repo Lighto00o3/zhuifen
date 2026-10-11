@@ -153,6 +153,7 @@ test('双人房间：人数校验、满员限制、两人开局、实时转分�
       assert.equal(subscribed.room.playerCount, 2);
     }
     const started = await command(a, { type: 'start' });
+    await command(a, { type: 'close' }, 409);
     const updates = sockets.map(socket => new Promise<PublicRoom>((resolve, reject) => {
       const timeout = setTimeout(() => { socket.off('room:state', listener); reject(new Error('双人实时同步超时')); }, 5000);
       function listener(state: PublicRoom) {
@@ -181,6 +182,73 @@ test('双人房间：人数校验、满员限制、两人开局、实时转分�
   } finally {
     sockets.forEach(socket => socket.disconnect());
     if (code) await app.get(Database).pool.query('DELETE FROM rooms WHERE code=$1', [code]);
+    await app.close();
+  }
+});
+
+test('房主关闭未开局房间：实时通知、权限、重试、拒绝加入与重启恢复', { timeout: 60000 }, async () => {
+  let app = await createApp();
+  await app.listen(0, '127.0.0.1');
+  let origin = await app.getUrl();
+  const codes: string[] = [];
+  const sockets: Socket[] = [];
+  async function request(path: string, body?: unknown, session?: Session, status = 201): Promise<any> {
+    const response = await fetch(`${origin}/api${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.token}` } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const result = await response.json();
+    assert.equal(response.status, status, JSON.stringify(result));
+    return result;
+  }
+  const command = (session: Session, body: Record<string, unknown>, status = 201) => request(`/rooms/${session.code}/commands`, { requestId: randomUUID(), ...body }, session, status);
+  try {
+    const alone = await request('/rooms', { name: '单人房主', playerCount: 2 });
+    codes.push(alone.room.code);
+    assert.equal((await command(alone.session, { type: 'close' })).status, 'closed');
+
+    const created = await request('/rooms', { name: '甲', playerCount: 3 });
+    const a: Session = created.session;
+    codes.push(a.code);
+    const b: Session = (await request(`/rooms/${a.code}/join`, { name: '乙', token: randomBytes(32).toString('hex'), requestId: randomUUID() })).session;
+    await command(b, { type: 'close' }, 403);
+    for (const session of [a, b]) {
+      const socket = io(origin, { transports: ['websocket'], forceNew: true });
+      sockets.push(socket);
+      await new Promise<void>((resolve, reject) => { socket.once('connect', resolve); socket.once('connect_error', reject); });
+      const result = await new Promise<{ ok: boolean }>((resolve, reject) => socket.timeout(5000).emit('room:subscribe', session, (error: Error | null, result: { ok: boolean }) => error ? reject(error) : resolve(result)));
+      assert.equal(result.ok, true);
+    }
+    const broadcasts = sockets.map(socket => new Promise<PublicRoom>((resolve, reject) => {
+      const timeout = setTimeout(() => { socket.off('room:state', listener); reject(new Error('未收到关闭通知')); }, 5000);
+      function listener(state: PublicRoom) {
+        if (state.status !== 'closed') return;
+        clearTimeout(timeout); socket.off('room:state', listener); resolve(state);
+      }
+      socket.on('room:state', listener);
+    }));
+    const requestId = randomUUID();
+    const closed = await command(a, { type: 'close', requestId });
+    for (const state of await Promise.all(broadcasts)) {
+      assert.equal(state.status, 'closed');
+      assert.ok(state.closedAt);
+      assert.deepEqual(state.members.map(member => member.score), [100, 100]);
+    }
+    assert.equal((await command(a, { type: 'close', requestId })).version, closed.version);
+    await request(`/rooms/${a.code}/join`, { name: '丙', token: randomBytes(32).toString('hex'), requestId: randomUUID() }, undefined, 409);
+    await command(a, { type: 'start' }, 409);
+    await command(b, { type: 'score', kind: 'foul' }, 409);
+    await command(a, { type: 'configure', initialScore: 100, rules: DEFAULT_RULES, order: [a.playerId, b.playerId] }, 409);
+    sockets.forEach(socket => socket.disconnect());
+    await app.close();
+    app = await createApp(); await app.listen(0, '127.0.0.1'); origin = await app.getUrl();
+    const restored = await request(`/rooms/${a.code}`, undefined, b, 200);
+    assert.equal(restored.status, 'closed');
+    assert.equal(restored.closedAt, closed.closedAt);
+  } finally {
+    sockets.forEach(socket => socket.disconnect());
+    for (const code of codes) await app.get(Database).pool.query('DELETE FROM rooms WHERE code=$1', [code]);
     await app.close();
   }
 });

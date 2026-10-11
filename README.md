@@ -66,7 +66,9 @@ API 启动时自动创建 `rooms` 与 `room_commands` 两张表。不会扫描�
 
 这里采用一组明确的默认规则，不代表各地追分玩法统一。房主可以在开局前调整分值、初始积分和座位顺序；收付对象暂时按表中规则固定。允许负分，暂未实现暴击、调门、让杆、黑金等地方规则。
 
-每人仅能以自己的身份记分。房主或上一笔操作本人可以撤销最新一笔未撤销的记录；撤销还原整笔积分转移，保留被撤销记录。只有房主可以开始和结束比赛，结束后记录只读。返回首页不会结束比赛。
+每人仅能以自己的身份记分。房主或上一笔操作本人可以撤销最新一笔未撤销的记录；撤销还原整笔积分转移，保留被撤销记录。只有房主可以开始和结束比赛，结束后记录只读。等待开局时，房主可点击「关闭房间」并确认，所有成员实时看到关闭状态，之后无法加入或开局。返回首页不会关闭房间或结束比赛。
+
+前端使用 Nuxt 文件路由：首页 `/`、房间 `/room?room=六位房间号`。支持浏览器前进、后退及刷新恢复，原来的 `/?room=房间号` 邀请链接仍兼容。静态部署预生成 `/room` 页面，因此直接打开房间链接不依赖动态路径重写。
 
 ## 数据与同步如何工作
 
@@ -96,7 +98,9 @@ apps/
     src/main.ts        NestJS 启动
     test/              规则测试与数据库/同步集成测试
   web/
-    app/app.vue        首页、房间、邀请、记录、断线与重试
+    app/app.vue        NuxtPage 路由入口
+    app/pages/         首页与房间页面
+    app/components/ScoreApp.vue 房间、邀请、记录、断线与重试
     app/assets/main.css 响应式样式
     nuxt.config.ts     开发代理和应用配置
 scripts/run.mjs        项目 Node 运行环境选择
@@ -122,7 +126,7 @@ npm run build
 | `POST /api/rooms` | 创建房间：`name, playerCount, initialScore, rules`；playerCount 为 2 或 3，省略时兼容默认 3 |
 | `POST /api/rooms/:code/join` | 加入：`name, token, requestId`，token 为客户端生成的 32 字节随机十六进制串 |
 | `GET /api/rooms/:code` | 成员读取完整公开状态 |
-| `POST /api/rooms/:code/commands` | 执行 `start / configure / score / undo / end`，带 `requestId` |
+| `POST /api/rooms/:code/commands` | 执行 `close / start / configure / score / undo / end`，带 `requestId` |
 
 成员请求通过 `Authorization: Bearer <token>` 鉴权。计分命令只有 `kind`，操作人从 token 推导，不能通过提交别人的 ID 代记分。
 
@@ -139,3 +143,5 @@ Socket.IO 默认生产环境使用同域 `/socket.io/`，开发环境直连同�
 生产环境的反向代理必须把 `/api/` 和 `/socket.io/` 转到 API，把其他路径转到 Nuxt，并为 `/socket.io/` 开启 WebSocket Upgrade；Nuxt 的 `devProxy` 只在开发时生效。可参考 `docs/nginx.conf.example`，设置真实域名、TLS、数据库凭证和 `CORS_ORIGINS`。
 
 当前只支持一个 API 实例。多实例需要共享 Socket.IO 房间广播和在线状态，例如 Redis adapter。公网运营前还需要房间生命周期/清理、账户恢复、请求限流与运维备份；这些没有伪装成已完成的功能。
+
+记分提示：每次影响自己的记分或撤销会在页面顶部显示加分/扣分消息，5 秒自动消失。首次打开和刷新只恢复比分，不重复提示历史记录；同步响应按版本去重。

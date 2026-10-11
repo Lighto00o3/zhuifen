@@ -84,6 +84,7 @@ export class Rooms {
     const state = await this.transaction(code, async state => {
       const existing = state.members.find(item => item.tokenHash === newcomer.member.tokenHash);
       if (existing) { newcomer.member = existing; return false; }
+      if (state.status === 'closed') throw new ConflictException('房间已关闭，无法加入');
       if (state.status !== 'waiting') throw new ConflictException('比赛已开始，请使用原来的设备恢复');
       if (state.members.length >= state.playerCount) throw new ConflictException(`${state.playerCount === 2 ? '双人' : '三人'}房间已满`);
       if (state.members.some(item => item.name === newcomer.member.name)) throw new ConflictException('这个昵称已被使用，请换一个');
@@ -124,6 +125,11 @@ export class Rooms {
       }
       const hostOnly = () => { if (actor.id !== state.hostId) throw new ForbiddenException('只有房主可以操作'); };
       switch (data.type) {
+        case 'close':
+          hostOnly();
+          if (state.status !== 'waiting') throw new ConflictException('只能关闭等待开局的房间，比赛开始后请结束本场');
+          state.status = 'closed'; state.closedAt = new Date().toISOString();
+          break;
         case 'start':
           hostOnly();
           if (state.status !== 'waiting' || state.members.length !== state.playerCount) throw new ConflictException(`需要 ${state.playerCount} 人加入后再开始`);

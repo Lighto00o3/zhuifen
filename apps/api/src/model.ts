@@ -10,9 +10,9 @@ export interface ScoreEvent {
   deltas: Record<string, number>; createdAt: string; undoneAt?: string;
 }
 export interface RoomState {
-  code: string; hostId: string; status: 'waiting' | 'playing' | 'ended';
+  code: string; hostId: string; status: 'waiting' | 'playing' | 'ended' | 'closed';
   version: number; playerCount: PlayerCount; initialScore: number; rules: Rules; members: Member[];
-  events: ScoreEvent[]; createdAt: string; startedAt?: string; endedAt?: string;
+  events: ScoreEvent[]; createdAt: string; startedAt?: string; endedAt?: string; closedAt?: string;
 }
 export interface PublicRoom extends Omit<RoomState, 'members'> {
   members: (Player & { online: boolean })[];
