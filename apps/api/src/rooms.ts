@@ -11,6 +11,11 @@ function name(value: unknown): string {
   if (typeof value !== 'string' || !value.trim() || value.trim().length > 12) throw new BadRequestException('昵称需要 1–12 个字');
   return value.trim();
 }
+function roomName(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.trim().length > 24) throw new BadRequestException('房间名最多 24 个字');
+  return value.trim() || undefined;
+}
 function integer(value: unknown, min: number, max: number): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) throw new BadRequestException(`分值需要是 ${min}–${max} 的整数`);
   return value;
@@ -62,10 +67,11 @@ export class Rooms {
     const owner = member(data.name);
     const config = settings(data);
     const capacity = playerCount(data.playerCount);
+    const title = roomName(data.roomName);
     owner.member.score = config.initialScore;
     for (let attempt = 0; attempt < 8; attempt++) {
       const code = String(randomInt(100000, 1000000));
-      const state: RoomState = { code, hostId: owner.member.id, status: 'waiting', version: 1,
+      const state: RoomState = { code, roomName: title, hostId: owner.member.id, status: 'waiting', version: 1,
         ...config, playerCount: capacity, members: [owner.member], events: [], createdAt: new Date().toISOString() };
       const result = await this.db.pool.query('INSERT INTO rooms(code,state) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING code', [code, state]);
       if (result.rowCount) return { state, session: { code, playerId: owner.member.id, token: owner.token } };
@@ -139,6 +145,7 @@ export class Rooms {
           hostOnly();
           if (state.status !== 'waiting') throw new ConflictException('只能在开局前修改规则');
           const config = settings(data);
+          if (Object.hasOwn(data, 'roomName')) state.roomName = roomName(data.roomName);
           const order = data.order;
           if (!Array.isArray(order) || order.length !== state.members.length || new Set(order).size !== order.length || order.some(id => !state.members.some(item => item.id === id))) throw new BadRequestException('玩家顺序不正确');
           state.members = order.map(id => state.members.find(item => item.id === id)!);

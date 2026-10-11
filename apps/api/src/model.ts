@@ -10,14 +10,14 @@ export interface ScoreEvent {
   deltas: Record<string, number>; createdAt: string; undoneAt?: string;
 }
 export interface RoomState {
-  code: string; hostId: string; status: 'waiting' | 'playing' | 'ended' | 'closed';
+  code: string; roomName?: string; hostId: string; status: 'waiting' | 'playing' | 'ended' | 'closed';
   version: number; playerCount: PlayerCount; initialScore: number; rules: Rules; members: Member[];
   events: ScoreEvent[]; createdAt: string; startedAt?: string; endedAt?: string; closedAt?: string;
 }
 export interface PublicRoom extends Omit<RoomState, 'members'> {
   members: (Player & { online: boolean })[];
 }
-export interface Session { code: string; playerId: string; token: string }
+export interface Session { code: string; playerId: string; token: string; roomName?: string }
 
 // 座位顺序沿出杆方向排列：前一位是上家，后一位是下家。
 // 默认：犯规给上家；普胜/小金收上家；大金/黄金九收其余玩家。双人局的上家就是对手。

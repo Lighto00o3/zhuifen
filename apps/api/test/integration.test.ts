@@ -48,10 +48,12 @@ test('三人真实数据库与实时同步：鉴权、并发、去重、撤销�
   });
   try {
     await request('/rooms', { name: '', initialScore: 100 }, undefined, 400);
+    for (const roomName of [null, 123, '名'.repeat(25)]) await request('/rooms', { name: '甲', roomName }, undefined, 400);
     const created = await request('/rooms', { name: '甲', initialScore: 100 });
     code = created.room.code;
     const a: Session = created.session;
     assert.equal(created.room.playerCount, 3);
+    assert.equal(created.room.roomName, undefined);
     // 模拟升级前创建的房间：JSONB 中没有人数字段。
     await app.get(Database).pool.query("UPDATE rooms SET state=state-'playerCount' WHERE code=$1", [code]);
     assert.equal((await request(`/rooms/${code}`, undefined, a, 200)).playerCount, 3);
@@ -69,7 +71,18 @@ test('三人真实数据库与实时同步：鉴权、并发、去重、撤销�
     await request(`/rooms/${code}/join`, { name: '丁', token: randomBytes(32).toString('hex'), requestId: randomUUID() }, undefined, 409);
     await cmd(b, { type: 'start' }, 403);
     const clients = await Promise.all([a, b, c].map(subscribe));
+    const config = { type: 'configure', rules: DEFAULT_RULES, initialScore: 100, order: [a.playerId, b.playerId, c.playerId] };
+    await cmd(b, { ...config, roomName: '非房主改名' }, 403);
+    await cmd(a, { ...config, roomName: '名'.repeat(25) }, 400);
+    const nameBroadcast = updated(clients[1]!.socket, clients[1]!.state.version + 1);
+    const named = await cmd(a, { ...config, roomName: '  周末球友局  ' });
+    assert.equal(named.roomName, '周末球友局');
+    assert.equal((await nameBroadcast).roomName, '周末球友局');
+    assert.equal((await cmd(a, config)).roomName, '周末球友局');
+    assert.equal((await cmd(a, { ...config, roomName: '   ' })).roomName, undefined);
+    await cmd(a, { ...config, roomName: '周末球友局' });
     const started = await cmd(a, { type: 'start' });
+    await cmd(a, { ...config, roomName: '开局后改名' }, 409);
     const broadcasts = clients.map(client => updated(client.socket, started.version + 1));
     const scoreId = randomUUID();
     const scored = await cmd(b, { type: 'score', kind: 'foul', requestId: scoreId });
@@ -104,6 +117,7 @@ test('三人真实数据库与实时同步：鉴权、并发、去重、撤销�
     await app.listen(0, '127.0.0.1'); origin = await app.getUrl();
     const restored = await request(`/rooms/${code}`, undefined, a, 200);
     assert.equal(restored.status, 'ended');
+    assert.equal(restored.roomName, '周末球友局');
     assert.deepEqual(restored.members.map((p: any) => p.score), [91, 115, 94]);
     assert.equal(restored.events.length, 4);
   } finally {
@@ -132,15 +146,17 @@ test('双人房间：人数校验、满员限制、两人开局、实时转分�
   const command = (session: Session, body: Record<string, unknown>, status = 201) => request(`/rooms/${session.code}/commands`, { requestId: randomUUID(), ...body }, session, status);
   try {
     for (const playerCount of [1, 4, '2', null]) await request('/rooms', { name: '甲', playerCount }, undefined, 400);
-    const created = await request('/rooms', { name: '甲', playerCount: 2 });
+    const created = await request('/rooms', { name: '甲', playerCount: 2, roomName: '  双人练球  ' });
     code = created.room.code;
     const a: Session = created.session;
     assert.equal(created.room.playerCount, 2);
+    assert.equal(created.room.roomName, '双人练球');
     await command(a, { type: 'start' }, 409);
     const join = { name: '乙', token: randomBytes(32).toString('hex'), requestId: randomUUID() };
     const b: Session = (await request(`/rooms/${code}/join`, join)).session;
     const retry = await request(`/rooms/${code}/join`, join);
     assert.equal(retry.room.members.length, 2);
+    assert.equal(retry.room.roomName, '双人练球');
     assert.equal(retry.session.playerId, b.playerId);
     await request(`/rooms/${code}/join`, { name: '丙', token: randomBytes(32).toString('hex'), requestId: randomUUID() }, undefined, 409);
     await command(a, { type: 'configure', initialScore: 100, rules: DEFAULT_RULES, order: [a.playerId, b.playerId] });
@@ -204,8 +220,9 @@ test('房主关闭未开局房间：实时通知、权限、重试、拒绝加�
   }
   const command = (session: Session, body: Record<string, unknown>, status = 201) => request(`/rooms/${session.code}/commands`, { requestId: randomUUID(), ...body }, session, status);
   try {
-    const alone = await request('/rooms', { name: '单人房主', playerCount: 2 });
+    const alone = await request('/rooms', { name: '单人房主', playerCount: 2, roomName: '   ' });
     codes.push(alone.room.code);
+    assert.equal(alone.room.roomName, undefined);
     assert.equal((await command(alone.session, { type: 'close' })).status, 'closed');
 
     const created = await request('/rooms', { name: '甲', playerCount: 3 });
