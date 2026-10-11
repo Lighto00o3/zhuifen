@@ -35,11 +35,18 @@
 
 推荐新功能在分支开发，创建 PR，合并到 `main`：
 
-当前服务通过平台连接工具创建，配置为 `main` 更新时自动部署：
+当前服务通过平台连接工具创建，自动部署开关已打开，但使用公开仓库 URL 创建服务后，还需连接 GitHub 部署凭证才能收到提交事件。首次检查中，推送并未触发部署，不能仅根据开关判断已生效。
+
+完成以下一次性连接后，才能实现合并即部署：
+
+1. Render Account Settings → Account Security → Git Deployment Credentials → Add credential → GitHub。
+2. 在 GitHub 授权 Render 读取 `Lighto00o3/zhuifen`，可只选择这个仓库。
+3. 分别打开前后端服务的 Settings → Git Credentials，选用刚连接的 GitHub 凭证。
+4. Auto-Deploy 选择 After CI Checks Pass；推送后检查两个服务的 Deploys 确实出现新提交。
 
 `PR 检查通过 → 合并 main → Render 自动部署`
 
-`.github/workflows/ci.yml` 检查类型、规则、真实 PostgreSQL 与三个 Socket.IO 客户端的同步，并验证 SSR 和静态构建。当前服务的自动部署触发条件是提交，因此合并前应确认 PR 检查通过。仓库内 `render.yaml` 则保留 `autoDeployTrigger: checksPass` 的 Blueprint 配置；已有服务若希望等待 main 检查后再部署，可在 Render 控制台的 Settings → Auto-Deploy 中选择 After CI Checks Pass。无需在 GitHub Actions 存部署令牌。
+`.github/workflows/ci.yml` 检查类型、规则、真实 PostgreSQL 与三个 Socket.IO 客户端的同步，并验证 SSR 和静态构建。仓库内 `render.yaml` 保留 `autoDeployTrigger: checksPass` 的 Blueprint 配置，但不会自动修改已通过连接工具创建的服务。完成以上配置后，无需在 GitHub Actions 存部署令牌。
 
 线上 API 部署完成后，可以运行以下检查。它创建一个三人测试房间，确认所有客户端收到 `101 / 99 / 100` 的比分，并在结束时关闭测试房间：
 
