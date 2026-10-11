@@ -4,7 +4,17 @@
 
 选择 Render 免费静态站点承载 Nuxt，免费 Web Service 承载 NestJS，Neon 免费 PostgreSQL 保存比分。免费套餐受资源、构建和流量额度限制，适合初期试用；不代表长期高流量也免费。Render 免费数据库 30 天到期，因此本方案使用外部数据库。
 
-不需要购买域名。前端和后端分别使用 Render 自动分配的 `https://实际服务名.onrender.com` 地址，平台提供 HTTPS。用户分享前端地址或页面生成的房间二维码即可，三部手机仍可加入同一个房间。该默认域名的国内访问质量需要用各运营商流量实测，当前尚未生成正式可用地址。
+不需要购买域名。前端和后端分别使用 Render 自动分配的 `https://实际服务名.onrender.com` 地址，平台提供 HTTPS。用户分享前端地址或页面生成的房间二维码即可，三部手机仍可加入同一个房间。该默认域名的国内访问质量需要用各运营商流量实测。
+
+## 当前服务
+
+- 前端：https://zhuifen-web-lighto00o3.onrender.com
+- API：https://zhuifen-api-lighto00o3.onrender.com/api/health
+- Render 前端控制台：https://dashboard.render.com/static/srv-db5s7s2jnfac73biec6g
+- Render 后端控制台：https://dashboard.render.com/web/srv-db5s8l0473hc73c7vnv0
+- Neon 控制台：https://console.neon.tech/app/projects/rough-moon-14079461
+
+后端与数据库均在新加坡，API 是 Render Free，数据库为 Neon Free。运行时使用 `production` 分支中的 `zhuifen_app` 数据库和专用账号；数据库密码仅配置在 Render。请用这些现有服务管理部署，不要再次创建同名 Blueprint，以免产生重复服务。
 
 ## 首次上线
 
@@ -25,9 +35,17 @@
 
 推荐新功能在分支开发，创建 PR，合并到 `main`：
 
-`PR → 合并 main → GitHub Actions CI → 检查通过 → Render 自动部署`
+当前服务通过平台连接工具创建，配置为 `main` 更新时自动部署：
 
-`.github/workflows/ci.yml` 检查类型、规则、真实 PostgreSQL 与三个 Socket.IO 客户端的同步，并验证 SSR 和静态构建。`render.yaml` 的 `autoDeployTrigger: checksPass` 要求检查通过再部署；无需在 GitHub Actions 存部署令牌。首次创建服务仍需要手动连接平台。
+`PR 检查通过 → 合并 main → Render 自动部署`
+
+`.github/workflows/ci.yml` 检查类型、规则、真实 PostgreSQL 与三个 Socket.IO 客户端的同步，并验证 SSR 和静态构建。当前服务的自动部署触发条件是提交，因此合并前应确认 PR 检查通过。仓库内 `render.yaml` 则保留 `autoDeployTrigger: checksPass` 的 Blueprint 配置；已有服务若希望等待 main 检查后再部署，可在 Render 控制台的 Settings → Auto-Deploy 中选择 After CI Checks Pass。无需在 GitHub Actions 存部署令牌。
+
+线上 API 部署完成后，可以运行以下检查。它创建一个三人测试房间，确认所有客户端收到 `101 / 99 / 100` 的比分，并在结束时关闭测试房间：
+
+```bash
+node scripts/verify-live.mjs https://zhuifen-api-lighto00o3.onrender.com
+```
 
 ## 免费方案的边界
 
