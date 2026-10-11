@@ -122,7 +122,7 @@ Socket.IO 默认生产环境使用同域 `/socket.io/`，开发环境直连同�
 
 ## 部署边界
 
-面向国内用户，优先评估国内云服务器的 Docker Compose 部署及手机流量访问效果。免费功能验证可选 [Render + Neon 部署说明](docs/render.md)，国内访问速度需实测。根目录 `render.yaml` 和 GitHub Actions 已准备好：首次连接 Render 后，合并到 `main`，CI 检查通过就自动部署。尚未创建云服务。另有 [Railway 部署说明](docs/railway.md) 可选。
+面向国内用户，采用 [国内服务器与自动上线说明](docs/domestic.md)：GitHub Actions 检查、构建镜像，服务器准备好并开启开关后，合并到 `main` 就自动部署。免费功能验证可选 [Render + Neon 部署说明](docs/render.md)，国内访问速度需实测。尚未创建云服务。另有 [Railway 部署说明](docs/railway.md) 可选。
 
 这是可本地运行并已准备生产部署配置的第一版，尚未发布到公网。推荐使用 [公网部署说明](docs/deployment.md) 中的 Docker Compose + Caddy：一个域名统一提供 HTTPS 页面、接口与实时连接，球友可分别使用手机流量。`Dockerfile` 包含 API / Web 两个生产镜像目标，`compose.production.yaml` 包含持久化 PostgreSQL 与自动 HTTPS 网关。
 

@@ -43,3 +43,25 @@ jobs:
         env:
           NUXT_SPA: 'true'
           NUXT_PUBLIC_API_ORIGIN: https://api.example.com
+  package-and-deploy:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: zhuifen-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -f deploy/Dockerfile.api -t zhuifen-api:$GITHUB_SHA .
+      - name: Build Nuxt image
+        run: docker build -f deploy/Dockerfile.web -t zhuifen-web:$GITHUB_SHA .
+      - name: Deploy to domestic server
+        if: vars.DEPLOY_ENABLED == 'true'
+        run: bash scripts/deploy-ssh.sh
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}

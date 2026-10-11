@@ -1,0 +1,5 @@
+services:
+  api:
+    image: zhuifen-api:${DEPLOY_TAG:?请设置发布版本}
+  web:
+    image: zhuifen-web:${DEPLOY_TAG:?请设置发布版本}
