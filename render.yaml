@@ -1,0 +1,38 @@
+# 免费试用方案：Nuxt 静态站点 + NestJS，数据库使用外部 Neon。
+# 首次部署填写实际域名和数据库连接；不要把数据库凭证提交到 Git。
+services:
+  - type: web
+    name: zhuifen-api-lighto00o3
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./deploy/Dockerfile.api
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+  - type: web
+    name: zhuifen-web-lighto00o3
+    runtime: static
+    branch: main
+    buildCommand: npm ci --ignore-scripts --no-audit --no-fund && npm run generate -w @zhuifen/web
+    staticPublishPath: apps/web/.output/public
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: NUXT_SPA
+        value: 'true'
+      - key: NUXT_PUBLIC_API_ORIGIN
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

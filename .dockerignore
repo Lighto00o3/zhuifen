@@ -1,0 +1,10 @@
+**/node_modules
+**/.nuxt
+**/.output
+**/dist
+.git
+.tools
+**/.env
+**/.env.*
+**/*.log
+docs/*.png

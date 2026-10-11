@@ -1,0 +1,16 @@
+{
+  "name": "@zhuifen/api", "version": "0.1.0", "private": true,
+  "scripts": {
+    "dev": "tsx watch src/main.ts", "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/main.js", "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/rules.test.ts",
+    "test:integration": "tsx --test test/integration.test.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.1.2", "@nestjs/core": "^12.1.2",
+    "@nestjs/platform-express": "^12.1.2", "@nestjs/platform-socket.io": "^12.1.2",
+    "@nestjs/websockets": "^12.1.2", "dotenv": "^17.2.3", "pg": "^8.23.1",
+    "reflect-metadata": "^0.2.2", "rxjs": "^7.8.2", "socket.io": "^4.8.4"
+  },
+  "devDependencies": {"@types/node": "^22.19.0", "@types/pg": "^8.15.6", "tsx": "^4.20.6", "typescript": "^5.9.3", "socket.io-client": "^4.8.4"}
+}
