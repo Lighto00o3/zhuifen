@@ -35,7 +35,7 @@
 
 推荐新功能在分支开发，创建 PR，合并到 `main`：
 
-当前服务通过平台连接工具创建，自动部署开关已打开，但使用公开仓库 URL 创建服务后，还需连接 GitHub 部署凭证才能收到提交事件。首次检查中，推送并未触发部署，不能仅根据开关判断已生效。
+前后端服务均已配置 `Auto-Deploy: After CI Checks Pass`，部署分支为 `main`。合并后 GitHub Actions 会再次检查 main，Render 等待检查通过后才部署。
 
 完成以下一次性连接后，才能实现合并即部署：
 
@@ -44,7 +44,7 @@
 3. 分别打开前后端服务的 Settings → Git Credentials，选用刚连接的 GitHub 凭证。
 4. Auto-Deploy 选择 After CI Checks Pass；推送后检查两个服务的 Deploys 确实出现新提交。
 
-`PR 检查通过 → 合并 main → Render 自动部署`
+`PR 检查通过 → 合并 main → main 检查通过 → Render 自动部署`
 
 `.github/workflows/ci.yml` 检查类型、规则、真实 PostgreSQL 与三个 Socket.IO 客户端的同步，并验证 SSR 和静态构建。仓库内 `render.yaml` 保留 `autoDeployTrigger: checksPass` 的 Blueprint 配置，但不会自动修改已通过连接工具创建的服务。完成以上配置后，无需在 GitHub Actions 存部署令牌。
 
