@@ -4,6 +4,8 @@
 
 选择 Render 免费静态站点承载 Nuxt，免费 Web Service 承载 NestJS，Neon 免费 PostgreSQL 保存比分。免费套餐受资源、构建和流量额度限制，适合初期试用；不代表长期高流量也免费。Render 免费数据库 30 天到期，因此本方案使用外部数据库。
 
+不需要购买域名。前端和后端分别使用 Render 自动分配的 `https://实际服务名.onrender.com` 地址，平台提供 HTTPS。用户分享前端地址或页面生成的房间二维码即可，三部手机仍可加入同一个房间。该默认域名的国内访问质量需要用各运营商流量实测，当前尚未生成正式可用地址。
+
 ## 首次上线
 
 1. 登录 Render 并授权访问这个 GitHub 仓库，登录 Neon 创建免费 PostgreSQL 项目，尽量选择与后端接近的区域。
@@ -14,6 +16,8 @@
 6. 检查 `/api/health`，再用三个独立浏览器会话及三部手机流量验收：创建、加入、开局、犯规、撤销、刷新和重连。
 
 账号登录、授权和支付验证需要账号所有者操作；可以通过已连接的 Render、Neon 工具协助创建与配置。不要在聊天里发送密码或数据库连接字符串。
+
+由代理协助时，用户先用自己的 GitHub 账号登录 [Render](https://dashboard.render.com/) 与 [Neon](https://console.neon.tech/)，保持免费套餐，并安装、授权相应连接。Render 还需要获准读取 `Lighto00o3/zhuifen`。完成连接后代理可以创建数据库和服务、配置环境变量并检查上线结果。
 
 静态前端在构建时读取 `NUXT_PUBLIC_API_ORIGIN`，调整后需要重新构建。使用 `NUXT_SPA=true` 生成 SPA，不需要付费运行 Nuxt 服务端；原有默认 SSR 和 Docker Compose 部署仍可用。
 

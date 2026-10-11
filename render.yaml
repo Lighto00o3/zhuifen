@@ -28,6 +28,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 24.21.0
+      - key: SKIP_INSTALL_DEPS
+        value: 'true'
       - key: NUXT_SPA
         value: 'true'
       - key: NUXT_PUBLIC_API_ORIGIN
