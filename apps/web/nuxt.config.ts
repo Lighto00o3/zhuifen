@@ -13,7 +13,7 @@ export default defineNuxtConfig({
     link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
     meta: [{ name: 'description', content: '双人或三人追分，扫码加入，一次记分，大家实时看见。' }],
   } },
-  nitro: { prerender: { routes: ['/', '/room'] }, devProxy: {
+  nitro: { prerender: { routes: ['/', '/room', '/design-preview'] }, devProxy: {
     '/api/': { target: 'http://127.0.0.1:3001/api/', changeOrigin: true },
   } },
 })
