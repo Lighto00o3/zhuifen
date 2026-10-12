@@ -299,7 +299,7 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
       </TransitionGroup>
     </div>
     <header class="site-header" :inert="modalOpen">
-      <a class="brand" href="/" @click.prevent="back"><span class="brand-ball">9</span>追分<span class="brand-sub">球友的共享记分牌</span></a>
+      <a class="brand" href="/" @click.prevent="back"><span class="brand-ball" aria-hidden="true"><span>9</span></span>追分<span class="brand-sub">球友的共享记分牌</span></a>
       <span v-if="room" class="connection" :class="{ offline: !connected }"><i />{{ connected ? '实时同步中' : '正在重新连接' }}</span>
       <span v-else class="header-note">双人 / 三人追分</span>
     </header>
