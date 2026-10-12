@@ -19,22 +19,16 @@ export interface PublicRoom extends Omit<RoomState, 'members'> {
 }
 export interface Session { code: string; playerId: string; token: string; roomName?: string }
 
-// 座位顺序沿出杆方向排列：前一位是上家，后一位是下家。
-// 默认：犯规给上家；普胜/小金收上家；大金/黄金九收其余玩家。双人局的上家就是对手。
-export function scoreDeltas(members: Player[], actorId: string, kind: ScoreKind, rules: Rules): Record<string, number> {
+// 输家发起给分：犯规自动给上家，其余类型给指定的赢家，每次只支付一份分值。
+export function scoreDeltas(members: Player[], actorId: string, kind: ScoreKind, rules: Rules, recipientId?: string): Record<string, number> {
   const index = members.findIndex(member => member.id === actorId);
   if ((members.length !== 2 && members.length !== 3) || index < 0) throw new Error('需要两名或三名有效玩家');
-  const actor = members[index]!;
-  const previous = members[(index + members.length - 1) % members.length]!;
-  const deltas: Record<string, number> = Object.fromEntries(members.map(member => [member.id, 0]));
+  const recipient = kind === 'foul' ? members[(index + members.length - 1) % members.length] : members.find(member => member.id === recipientId && member.id !== actorId);
+  if (!recipient) throw new Error('请选择其他球友收分');
   const value = rules[kind];
   if (!Number.isInteger(value) || value < 1 || value > 100) throw new Error('分值需要在 1–100 之间');
-  if (kind === 'foul') {
-    deltas[actor.id] = -value;
-    deltas[previous.id] = value;
-  } else {
-    const payers = kind === 'dajin' || kind === 'golden9' ? members.filter(member => member.id !== actorId) : [previous];
-    for (const payer of payers) { deltas[payer.id] = -value; deltas[actor.id]! += value; }
-  }
+  const deltas: Record<string, number> = Object.fromEntries(members.map(member => [member.id, 0]));
+  deltas[actorId] = -value;
+  deltas[recipient.id] = value;
   return deltas;
 }

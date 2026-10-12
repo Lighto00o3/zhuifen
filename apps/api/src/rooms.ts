@@ -157,9 +157,10 @@ export class Rooms {
           if (state.status !== 'playing') throw new ConflictException('当前比赛不能记分');
           if (typeof data.kind !== 'string' || !Object.hasOwn(DEFAULT_RULES, data.kind)) throw new BadRequestException('计分类型不正确');
           const kind = data.kind as ScoreKind;
-          const deltas = scoreDeltas(state.members, actor.id, kind, state.rules);
+          if (kind !== 'foul' && (typeof data.recipientId !== 'string' || data.recipientId === actor.id || !state.members.some(item => item.id === data.recipientId))) throw new BadRequestException('请选择其他球友收分');
+          const deltas = scoreDeltas(state.members, actor.id, kind, state.rules, data.recipientId as string | undefined);
           state.members.forEach(item => { item.score += deltas[item.id]!; });
-          state.events.push({ id: requestId, kind, actorId: actor.id, label: LABELS[kind], deltas, createdAt: new Date().toISOString() });
+          state.events.push({ id: requestId, kind, actorId: actor.id, label: kind === 'foul' ? LABELS[kind] : `给分（${LABELS[kind]}）`, deltas, createdAt: new Date().toISOString() });
           break;
         }
         case 'undo': {

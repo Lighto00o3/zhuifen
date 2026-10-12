@@ -100,15 +100,15 @@ test('三人真实数据库与实时同步：鉴权、并发、去重、撤销�
     assert.deepEqual(undone.members.map((p: any) => p.score), [100, 100, 100]);
     await cmd(b, { type: 'undo', eventId: scoreId, requestId: undoId });
     const concurrentIds = [randomUUID(), randomUUID()];
-    await Promise.all([cmd(b, { type: 'score', kind: 'foul', requestId: concurrentIds[0] }), cmd(c, { type: 'score', kind: 'normal', requestId: concurrentIds[1] })]);
+    await Promise.all([cmd(b, { type: 'score', kind: 'foul', requestId: concurrentIds[0] }), cmd(c, { type: 'score', kind: 'normal', recipientId: b.playerId, requestId: concurrentIds[1] })]);
     const concurrent = await request(`/rooms/${code}`, undefined, a, 200);
-    assert.deepEqual(concurrent.members.map((p: any) => p.score), [101, 95, 104]);
+    assert.deepEqual(concurrent.members.map((p: any) => p.score), [101, 103, 96]);
     assert.equal(concurrent.members.reduce((sum: number, p: any) => sum + p.score, 0), 300);
     await cmd(a, { type: 'undo', eventId: scoreId }, 409);
     clients[2]!.socket.disconnect();
-    await cmd(b, { type: 'score', kind: 'dajin' });
+    await cmd(b, { type: 'score', kind: 'dajin', recipientId: a.playerId });
     const reconnected = await subscribe(c);
-    assert.deepEqual(reconnected.state.members.map(p => p.score), [91, 115, 94]);
+    assert.deepEqual(reconnected.state.members.map(p => p.score), [111, 93, 96]);
     await cmd(a, { type: 'end' });
     await cmd(b, { type: 'score', kind: 'foul' }, 409);
     sockets.forEach(socket => socket.disconnect());
@@ -118,7 +118,7 @@ test('三人真实数据库与实时同步：鉴权、并发、去重、撤销�
     const restored = await request(`/rooms/${code}`, undefined, a, 200);
     assert.equal(restored.status, 'ended');
     assert.equal(restored.roomName, '周末球友局');
-    assert.deepEqual(restored.members.map((p: any) => p.score), [91, 115, 94]);
+    assert.deepEqual(restored.members.map((p: any) => p.score), [111, 93, 96]);
     assert.equal(restored.events.length, 4);
   } finally {
     sockets.forEach(socket => socket.disconnect());
@@ -182,9 +182,11 @@ test('双人房间：人数校验、满员限制、两人开局、实时转分�
     const foul = await command(b, { type: 'score', kind: 'foul', requestId });
     for (const state of await Promise.all(updates)) assert.deepEqual(state.members.map(member => member.score), [101, 99]);
     assert.equal((await command(b, { type: 'score', kind: 'foul', requestId })).version, foul.version);
+    for (const recipientId of [undefined, b.playerId, randomUUID()]) await command(b, { type: 'score', kind: 'dajin', ...(recipientId ? { recipientId } : {}) }, 400);
+    assert.equal((await request(`/rooms/${code}`, undefined, b, 200)).version, foul.version);
     const dajin = randomUUID();
-    const scored = await command(b, { type: 'score', kind: 'dajin', requestId: dajin });
-    assert.deepEqual(scored.members.map((member: any) => member.score), [91, 109]);
+    const scored = await command(b, { type: 'score', kind: 'dajin', recipientId: a.playerId, requestId: dajin });
+    assert.deepEqual(scored.members.map((member: any) => member.score), [111, 89]);
     const undone = await command(b, { type: 'undo', eventId: dajin });
     assert.deepEqual(undone.members.map((member: any) => member.score), [101, 99]);
     await command(a, { type: 'end' });
