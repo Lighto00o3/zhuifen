@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { io, type Socket } from 'socket.io-client'
 import QRCode from 'qrcode'
+import { pointCards } from '../utils/pointCards'
 import type { PlayerCount, PublicRoom, Rules, ScoreKind, Session } from '../../../api/src/model'
 
 const route = useRoute()
@@ -82,6 +83,8 @@ const activeEvents = computed(() => room.value?.events.filter(e => !e.undoneAt) 
 const totalScore = computed(() => room.value?.members.reduce((sum, p) => sum + p.score, 0) ?? 0)
 const capacity = computed(() => room.value?.playerCount ?? 3)
 const modeLabel = computed(() => capacity.value === 2 ? '双人追分' : '三人追分')
+const scoreCards = computed(() => Object.fromEntries(Object.keys(labels).map(kind => [kind, pointCards(scoreValue(kind as ScoreKind))])) as Record<ScoreKind, ReturnType<typeof pointCards>>)
+const cardSuits: Record<ScoreKind, string> = { foul: '♠', normal: '♠', xiaojin: '♥', dajin: '♣', golden9: '♦' }
 function scoreValue(kind: ScoreKind) {
   if (!room.value) return 0
   return room.value.rules[kind]
@@ -123,7 +126,7 @@ function receive(state: PublicRoom) {
           transfers.value?.enqueue({ id: `${event.id}-${undone}`, from: payer[0], to: receiver[0],
             fromName: state.members.find(p => p.id === payer[0])?.name ?? '球友',
             toName: state.members.find(p => p.id === receiver[0])?.name ?? '球友',
-            points: receiver[1], mine: playerId, undo: undone })
+            points: receiver[1], mine: playerId, undo: undone, suit: cardSuits[event.kind] })
           continue
         }
         const delta = (event.deltas[playerId] ?? 0) * (undone ? -1 : 1)
@@ -350,7 +353,20 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
             <template v-if="room.status === 'waiting'"><button v-for="n in capacity - room.members.length" :key="`empty-${n}`" class="player-card empty-seat" type="button" aria-label="邀请球友加入房间" @click="invite"><span class="empty-icon">＋</span><span class="empty-seat-title">留给下一位球友</span><span class="empty-seat-copy">扫一扫，一起上桌</span><span class="text-button">邀请加入 →</span></button></template>
           </div>
 
-          <section v-if="room.status === 'playing'" class="action-panel"><div class="section-label"><h2>我来给分</h2><span>以「{{ me?.name }}」的身份给分</span></div><div class="score-actions"><button v-for="(label, kind) in labels" :key="kind" :class="['score-action', kind]" :disabled="busy || !connected || !!pending" @click="give(kind)"><span>{{ kind === 'foul' ? label : `给${label}` }}</span><b>−{{ scoreValue(kind) }}<small>分</small></b><em>{{ scoreHint(kind) }}</em></button></div><div class="action-footer"><span>输的人给分，整桌实时同步。</span><button class="text-button" :disabled="!canUndo || busy || !connected || !!pending" @click="confirmation = 'undo'">↶ 撤销上一笔</button></div></section>
+          <section v-if="room.status === 'playing'" class="action-panel">
+            <div class="section-label"><h2>我来给分</h2><span>点一张牌，给球友分</span></div>
+            <div class="score-actions">
+              <button v-for="(label, kind, index) in labels" :key="kind" :class="['score-action', kind]" :style="{ '--card-tilt': `${(index - 2) * 3}deg` }" :aria-label="`${kind === 'foul' ? label : `给${label}`}，${scoreValue(kind)} 分，${scoreHint(kind)}`" :disabled="busy || !connected || !!pending" @click="give(kind)">
+                <span class="score-card-stack" aria-hidden="true">
+                  <span v-for="(card, cardIndex) in scoreCards[kind].slice(0, 3)" :key="cardIndex" class="score-card-face" :style="{ '--stack-offset': `${cardIndex * 3}px`, zIndex: 3 - cardIndex }"><PlayingCard :value="card.value" :face="card.rank" :suit="cardSuits[kind]" /></span>
+                </span>
+                <span class="score-card-label">{{ label }}</span>
+                <span class="score-card-amount">−{{ scoreValue(kind) }} 分<span v-if="scoreCards[kind].length > 1"> · {{ scoreCards[kind].length }} 张</span></span>
+              </button>
+            </div>
+            <p class="card-rule-note">{{ capacity === 2 ? '犯规直接给对手，其他牌按赢家的得分支付。' : `犯规给上家；大金每人给 ${room.rules.dajin} 分，黄金9每人给 ${room.rules.golden9} 分（共 ${room.rules.golden9 * 2} 分）。` }}</p>
+            <div class="action-footer"><span>以「{{ me?.name }}」的身份给分</span><button class="text-button" :disabled="!canUndo || busy || !connected || !!pending" @click="confirmation = 'undo'">↶ 撤销上一笔</button></div>
+          </section>
 
           <section v-if="room.status === 'waiting'" class="lobby-ready"><p>{{ room.members.length === capacity ? '球友到齐了，确认座位顺序后开局。' : `还差 ${capacity - room.members.length} 位球友，点空位邀请加入。` }}</p><button v-if="isHost" class="primary full" type="button" :disabled="room.members.length !== capacity || busy || !connected || !!pending" @click="command({ type: 'start' })">{{ room.members.length === capacity ? `${capacity === 2 ? '两人' : '三人'}到齐，开始追分` : `等待${capacity === 2 ? '两人' : '三人'}到齐` }}</button><p v-else class="muted">由房主确认并开始追分。</p></section>
           <DisclosurePanel v-if="room.status === 'waiting'" class="settings-panel" :action="isHost ? '修改' : '查看'"><template #title>房间与开局设置</template><div class="section-label"><h2>开局规则</h2><span>{{ isHost ? '房主可以调整' : '由房主设置' }}</span></div><form @submit.prevent="configure"><label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="留空则只显示房间号" :disabled="!isHost" /></label><div class="settings-grid"><label class="field">初始积分<input v-model.number="initialScore" type="number" min="1" max="10000" :disabled="!isHost" required /></label><label v-for="(label, kind) in labels" :key="kind" class="field">{{ label }}{{ kind === 'golden9' || kind === 'dajin' ? '（每位输家）' : '' }}<input v-model.number="rules[kind]" type="number" min="1" max="100" :disabled="!isHost" required /></label></div><p class="rule-help">{{ capacity === 2 ? '所有按钮只扣自己的分、给对手加分。犯规给对手；其他按钮按赢家的普胜、小金、大金或黄金九支付一份分值。' : '所有按钮只扣自己的分。犯规自动给上家；其他按钮选择赢家给分。大金、黄金9由上下家分别给分。默认大金每人给 10 分，赢家共得 20 分；黄金9每人给 4 分，赢家共得 8 分。' }}允许积分低于零。</p><div v-if="isHost" class="lobby-actions"><button class="secondary" :disabled="busy || !connected || !!pending" type="submit">保存设置</button></div><p v-else class="muted">大家确认顺序和规则后，由房主开始。</p></form></DisclosurePanel>

@@ -4,7 +4,7 @@ import { pointCards } from '../utils/pointCards'
 
 export interface Transfer {
   id: string; from: string; to: string; fromName: string; toName: string
-  points: number; mine?: string; undo: boolean
+  points: number; mine?: string; undo: boolean; suit?: string
 }
 const active = ref<Transfer | null>(null)
 const layer = ref<HTMLElement | null>(null)
@@ -81,10 +81,7 @@ defineExpose({ enqueue })
     <div ref="layer" class="transfer-layer" aria-live="polite" role="status" aria-atomic="true">
       <template v-if="active">
         <div v-for="(card, index) in cards" :key="`${active.id}-${index}`" class="transfer-card" aria-hidden="true">
-          <span class="card-corner">{{ card.rank }}<small>♦</small></span>
-          <span class="card-suit">♦</span>
-          <span class="card-corner card-corner-bottom">{{ card.rank }}<small>♦</small></span>
-          <span class="card-value">{{ card.value }} 分</span>
+          <PlayingCard :value="card.value" :face="card.rank" :suit="active.suit" />
         </div>
         <div class="transfer-caption" :class="{ received: active.to === active.mine, paid: active.from === active.mine }">
           <span class="transfer-amount">{{ active.to === active.mine ? '+' : active.from === active.mine ? '−' : '' }}{{ active.points }}<small>分</small></span>
@@ -97,8 +94,7 @@ defineExpose({ enqueue })
 
 <style scoped>
 .transfer-layer { position: fixed; inset: 0; z-index: 80; pointer-events: none; overflow: hidden; perspective: 900px; }
-.transfer-card { position: absolute; left: 0; top: 0; width: 72px; height: 104px; border-radius: 9px; background: linear-gradient(125deg, #fff, #faf9f6); color: #b54c48; box-shadow: 0 12px 25px #1d1d1f28, inset 0 0 0 1px #1d1d1f08; opacity: 0; will-change: transform, opacity; }
-.card-corner { position: absolute; top: 7px; left: 8px; font: 700 19px/1 Georgia, serif; text-align: center; }.card-corner small { display: block; font-size: 12px; margin-top: 2px; }.card-corner-bottom { top: auto; left: auto; bottom: 7px; right: 8px; transform: rotate(180deg); }.card-suit { position: absolute; inset: 25px 0 auto; text-align: center; font-size: 37px; }.card-value { position: absolute; top: 68px; width: 100%; text-align: center; font-size: 10px; color: #8a7770; }
+.transfer-card { position: absolute; left: 0; top: 0; width: 72px; height: 104px; opacity: 0; will-change: transform, opacity; }
 .transfer-caption { position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); left: 50%; translate: -50% 0; width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 16px; padding: 18px 24px; border-radius: 24px; background: var(--feedback, #ffffffed); backdrop-filter: blur(18px); box-shadow: 0 12px 50px #1d1d1f20; color: var(--ink, #1d1d1f); font-size: 14px; font-weight: 600; opacity: 0; }
 .transfer-caption small { display: block; font-size: 11px; color: var(--muted, #737377); margin-top: 5px; font-weight: 400; }.transfer-amount { font-size: 36px; font-weight: 700; letter-spacing: -1.5px; white-space: nowrap; }.transfer-amount small { display: inline; margin-left: 4px; letter-spacing: 0; }.received .transfer-amount { color: var(--positive, #23745e); }.paid .transfer-amount { color: var(--negative, #b54c48); }
 @media (prefers-reduced-motion: reduce) { .transfer-card { display: none; } }
