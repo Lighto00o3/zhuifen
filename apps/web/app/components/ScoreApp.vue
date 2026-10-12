@@ -7,7 +7,7 @@ const route = useRoute()
 const router = useRouter()
 
 const apiOrigin = useRuntimeConfig().public.apiOrigin.replace(/\/$/, '')
-const labels: Record<ScoreKind, string> = { foul: '犯规', normal: '普胜', xiaojin: '小金', dajin: '大金', golden9: '黄金九' }
+const labels: Record<ScoreKind, string> = { foul: '犯规', normal: '普胜', xiaojin: '小金', dajin: '大金', golden9: '黄金9' }
 const room = ref<PublicRoom | null>(null)
 const session = ref<Session | null>(null)
 const saved = ref<Session[]>([])
@@ -90,6 +90,7 @@ function scoreHint(kind: ScoreKind) {
   if (!room.value) return ''
   const value = room.value.rules[kind]
   if (capacity.value === 2) return `给对手 ${value} 分`
+  if (kind === 'golden9' || kind === 'dajin') return `每人给 ${value} 分，共 ${value * 2} 分`
   return kind === 'foul' ? `给上家 ${value} 分` : '选择收分的球友'
 }
 
@@ -300,8 +301,8 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
     </div>
     <header class="site-header" :inert="modalOpen">
       <a class="brand" href="/" @click.prevent="back"><span class="brand-ball" aria-hidden="true"><span>9</span></span>追分<span class="brand-sub">球友的共享记分牌</span></a>
-      <span v-if="room" class="connection" :class="{ offline: !connected }"><i />{{ connected ? '实时同步中' : '正在重新连接' }}</span>
-      <span v-else class="header-note">双人 / 三人追分</span>
+      <div class="header-actions"><span v-if="room" class="connection" :class="{ offline: !connected }"><i />{{ connected ? '实时同步中' : '正在重新连接' }}</span>
+      <span v-else class="header-note">双人 / 三人追分</span><ThemeToggle /></div>
     </header>
 
     <main v-if="!room" class="landing" :inert="modalOpen">
@@ -352,7 +353,7 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
           <section v-if="room.status === 'playing'" class="action-panel"><div class="section-label"><h2>我来给分</h2><span>以「{{ me?.name }}」的身份给分</span></div><div class="score-actions"><button v-for="(label, kind) in labels" :key="kind" :class="['score-action', kind]" :disabled="busy || !connected || !!pending" @click="give(kind)"><span>{{ kind === 'foul' ? label : `给${label}` }}</span><b>−{{ scoreValue(kind) }}<small>分</small></b><em>{{ scoreHint(kind) }}</em></button></div><div class="action-footer"><span>输的人给分，整桌实时同步。</span><button class="text-button" :disabled="!canUndo || busy || !connected || !!pending" @click="confirmation = 'undo'">↶ 撤销上一笔</button></div></section>
 
           <section v-if="room.status === 'waiting'" class="lobby-ready"><p>{{ room.members.length === capacity ? '球友到齐了，确认座位顺序后开局。' : `还差 ${capacity - room.members.length} 位球友，点空位邀请加入。` }}</p><button v-if="isHost" class="primary full" type="button" :disabled="room.members.length !== capacity || busy || !connected || !!pending" @click="command({ type: 'start' })">{{ room.members.length === capacity ? `${capacity === 2 ? '两人' : '三人'}到齐，开始追分` : `等待${capacity === 2 ? '两人' : '三人'}到齐` }}</button><p v-else class="muted">由房主确认并开始追分。</p></section>
-          <DisclosurePanel v-if="room.status === 'waiting'" class="settings-panel" :action="isHost ? '修改' : '查看'"><template #title>房间与开局设置</template><div class="section-label"><h2>开局规则</h2><span>{{ isHost ? '房主可以调整' : '由房主设置' }}</span></div><form @submit.prevent="configure"><label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="留空则只显示房间号" :disabled="!isHost" /></label><div class="settings-grid"><label class="field">初始积分<input v-model.number="initialScore" type="number" min="1" max="10000" :disabled="!isHost" required /></label><label v-for="(label, kind) in labels" :key="kind" class="field">{{ label }}<input v-model.number="rules[kind]" type="number" min="1" max="100" :disabled="!isHost" required /></label></div><p class="rule-help">{{ capacity === 2 ? '所有按钮只扣自己的分、给对手加分。犯规给对手；其他按钮按赢家的普胜、小金、大金或黄金九支付一份分值。' : '所有按钮只扣自己的分。犯规自动给上家；其他按钮选择赢家给分。大金、黄金九由每位输家分别支付一份分值。' }}允许积分低于零。</p><div v-if="isHost" class="lobby-actions"><button class="secondary" :disabled="busy || !connected || !!pending" type="submit">保存设置</button></div><p v-else class="muted">大家确认顺序和规则后，由房主开始。</p></form></DisclosurePanel>
+          <DisclosurePanel v-if="room.status === 'waiting'" class="settings-panel" :action="isHost ? '修改' : '查看'"><template #title>房间与开局设置</template><div class="section-label"><h2>开局规则</h2><span>{{ isHost ? '房主可以调整' : '由房主设置' }}</span></div><form @submit.prevent="configure"><label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="留空则只显示房间号" :disabled="!isHost" /></label><div class="settings-grid"><label class="field">初始积分<input v-model.number="initialScore" type="number" min="1" max="10000" :disabled="!isHost" required /></label><label v-for="(label, kind) in labels" :key="kind" class="field">{{ label }}{{ kind === 'golden9' || kind === 'dajin' ? '（每位输家）' : '' }}<input v-model.number="rules[kind]" type="number" min="1" max="100" :disabled="!isHost" required /></label></div><p class="rule-help">{{ capacity === 2 ? '所有按钮只扣自己的分、给对手加分。犯规给对手；其他按钮按赢家的普胜、小金、大金或黄金九支付一份分值。' : '所有按钮只扣自己的分。犯规自动给上家；其他按钮选择赢家给分。大金、黄金9由上下家分别给分。默认大金每人给 10 分，赢家共得 20 分；黄金9每人给 4 分，赢家共得 8 分。' }}允许积分低于零。</p><div v-if="isHost" class="lobby-actions"><button class="secondary" :disabled="busy || !connected || !!pending" type="submit">保存设置</button></div><p v-else class="muted">大家确认顺序和规则后，由房主开始。</p></form></DisclosurePanel>
 
           <section v-if="room.status === 'closed'" class="finished-panel"><span class="eyebrow">房主已关闭房间</span><h2>下次约球，再开一桌。</h2><p>这个房间无法再加入或开始追分。</p><button class="primary" @click="back">回首页，再开一桌 →</button></section>
           <section v-if="room.status === 'ended'" class="finished-panel"><span class="eyebrow">本场结束</span><h2>比分已保存，下次继续约。</h2><p>本场共记分 {{ activeEvents.length }} 笔，用时 {{ elapsed }}。每个人都能回到房间查看记录。</p><button class="primary" @click="back">回首页，再开一桌 →</button></section>

@@ -2,7 +2,7 @@ export type ScoreKind = 'foul' | 'normal' | 'xiaojin' | 'dajin' | 'golden9';
 export type PlayerCount = 2 | 3;
 export type Rules = Record<ScoreKind, number>;
 export const DEFAULT_RULES: Rules = { foul: 1, normal: 4, xiaojin: 7, dajin: 10, golden9: 4 };
-export const LABELS: Record<ScoreKind, string> = { foul: '犯规', normal: '普胜', xiaojin: '小金', dajin: '大金', golden9: '黄金九' };
+export const LABELS: Record<ScoreKind, string> = { foul: '犯规', normal: '普胜', xiaojin: '小金', dajin: '大金', golden9: '黄金9' };
 export interface Player { id: string; name: string; score: number }
 export interface Member extends Player { tokenHash: string }
 export interface ScoreEvent {

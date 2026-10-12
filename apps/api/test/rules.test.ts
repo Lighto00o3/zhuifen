@@ -27,3 +27,11 @@ test('三人大金由两位输家分别给赢家 10 分，单笔不会扣另一�
   assert.deepEqual(second, { a: 10, b: 0, c: -10 });
   assert.equal(first.a! + second.a!, 20);
 });
+test('黄金9默认上下家各给4分，赢家合计得8分；双人只给一份4分', () => {
+  const first = scoreDeltas(players, 'b', 'golden9', DEFAULT_RULES, 'a');
+  const second = scoreDeltas(players, 'c', 'golden9', DEFAULT_RULES, 'a');
+  assert.deepEqual(first, { a: 4, b: -4, c: 0 });
+  assert.deepEqual(second, { a: 4, b: 0, c: -4 });
+  assert.equal(first.a! + second.a!, 8);
+  assert.deepEqual(scoreDeltas(players.slice(0, 2), 'b', 'golden9', DEFAULT_RULES, 'a'), { a: 4, b: -4 });
+});
