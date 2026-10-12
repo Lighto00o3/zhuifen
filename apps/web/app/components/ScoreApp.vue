@@ -22,6 +22,7 @@ const busy = ref(false)
 const connected = ref(false)
 const error = ref('')
 const notice = ref('')
+const transfers = ref<{ enqueue: (transfer: import('./CardTransfer.vue').Transfer) => void } | null>(null)
 const scoreNotices = ref<{ id: number; text: string; positive: boolean }[]>([])
 const noticeTimers = new Set<ReturnType<typeof setTimeout>>()
 let noticeId = 0
@@ -114,6 +115,16 @@ function receive(state: PublicRoom) {
       const old = oldEvents.get(event.id)
       const undone = !!old && !old.undoneAt && !!event.undoneAt
       if ((!old && !event.undoneAt) || undone) {
+        const entries = Object.entries(event.deltas).map(([id, delta]) => [id, delta * (undone ? -1 : 1)] as const)
+        const payer = entries.find(([, delta]) => delta < 0)
+        const receiver = entries.find(([, delta]) => delta > 0)
+        if (payer && receiver) {
+          transfers.value?.enqueue({ id: `${event.id}-${undone}`, from: payer[0], to: receiver[0],
+            fromName: state.members.find(p => p.id === payer[0])?.name ?? '球友',
+            toName: state.members.find(p => p.id === receiver[0])?.name ?? '球友',
+            points: receiver[1], mine: playerId, undo: undone })
+          continue
+        }
         const delta = (event.deltas[playerId] ?? 0) * (undone ? -1 : 1)
         if (!delta) continue
         const actor = event.actorId === playerId ? '你' : state.members.find(p => p.id === event.actorId)?.name ?? '球友'
@@ -281,6 +292,7 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
 
 <template>
   <div class="app-shell">
+    <CardTransfer ref="transfers" />
     <div class="score-notices" role="status" aria-live="polite" aria-atomic="false">
       <TransitionGroup name="score-notice">
         <div v-for="item in scoreNotices" :key="item.id" class="score-notice" :class="{ loss: !item.positive }"><span aria-hidden="true">{{ item.positive ? '+' : '−' }}</span>{{ item.text }}</div>
@@ -330,7 +342,7 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
         <section class="score-section">
           <div class="section-label"><h2>同桌比分</h2><span>按出杆顺序排列</span></div>
           <div class="players" :class="{ duel: capacity === 2 }">
-            <article v-for="(player, index) in room.members" :key="player.id" class="player-card" :class="{ mine: player.id === session?.playerId }">
+            <article v-for="(player, index) in room.members" :key="player.id" :data-player-id="player.id" class="player-card" :class="{ mine: player.id === session?.playerId }">
               <div class="player-top"><span class="avatar" :class="`color-${index}`">{{ player.name.slice(0, 1) }}</span><div><h3>{{ player.name }}<span v-if="player.id === session?.playerId" class="you">我</span></h3><span class="presence" :class="{ online: player.online }"><i />{{ player.online ? '已在线' : '暂时离线' }}<span v-if="player.id === room.hostId"> · 房主</span></span></div></div>
               <div class="score-number" :class="{ compact: String(player.score).length > 4 }">{{ player.score }}<span>分</span></div><div class="player-bottom"><span :class="{ positive: player.score > room.initialScore, negative: player.score < room.initialScore }">本场 {{ player.score - room.initialScore > 0 ? '+' : '' }}{{ player.score - room.initialScore }}</span><button v-if="isHost && room.status === 'waiting' && index > 0" class="text-button" :disabled="busy || !connected || !!pending" @click="move(index)">↑ 向前一位</button><span v-else-if="capacity === 2 && player.id !== session?.playerId">我的对手</span><span v-else-if="capacity === 3 && player.id === previous?.id">我的上家</span><span v-else-if="capacity === 3 && player.id === next?.id">我的下家</span></div>
             </article>
