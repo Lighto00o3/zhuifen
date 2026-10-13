@@ -251,3 +251,8 @@ summary::-webkit-details-marker { display: none; }
 .settings-modal .settings-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 .settings-modal .field { font-size: 13px; }
 @media (max-width:760px) { .settings-modal { width: 100%; }.settings-entry { padding: 16px; }.settings-entry-title { font-size: 14px; } }
+
+.local-mode-entry { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 18px; margin-bottom: 24px; border-radius: 16px; color: var(--ink); background: var(--control); text-decoration: none; min-height: 72px; }
+.local-mode-entry b { display: block; font-size: 16px; }
+.local-mode-entry small { display: block; color: var(--muted); font-size: 12px; margin-top: 5px; }
+.local-mode-entry > span:last-child { font-size: 24px; color: var(--green); }

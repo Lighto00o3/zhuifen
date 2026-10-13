@@ -329,12 +329,13 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
     <main v-if="!room" class="landing" :inert="modalOpen">
       <section class="intro">
         <h1>开一桌，<br />一起追分。</h1>
-        <p class="intro-copy">输的人给分，整桌一起看。<br />各自用手机，把每一杆记清楚。</p>
+        <p class="intro-copy">输的人给分，整桌一起看。<br />多人联机，或用一台手机记全桌。</p>
         <div class="table-visual" aria-hidden="true"><div class="felt"><span class="pocket p1" /><span class="pocket p2" /><span class="pocket p3" /><span class="pocket p4" /><span class="cue-ball" /><span class="nine-ball"><span>9</span></span><span class="one-ball"><span>1</span></span><span class="shot-line" /></div></div>
         <div class="benefits"><span>不用注册</span><span>扫码同桌</span><span>实时给分</span></div>
       </section>
       <section class="entry-card">
         <div class="card-heading"><h2>和球友开一局</h2><p>取个昵称，就能上桌。</p></div>
+        <NuxtLink class="local-mode-entry" to="/local"><span><b>单机记分</b><small>一台手机，记录两人或三人追分</small></span><span aria-hidden="true">→</span></NuxtLink>
         <div class="tabs"><button :aria-pressed="tab === 'create'" :class="{ active: tab === 'create' }" @click="tab = 'create'; error = ''">创建房间</button><button :aria-pressed="tab === 'join'" :class="{ active: tab === 'join' }" @click="tab = 'join'; error = ''">加入房间</button></div>
         <form @submit.prevent="enter">
           <label class="field">你的昵称<input v-model="nickname" maxlength="12" placeholder="球友怎么称呼你？" autocomplete="nickname" required /></label>
