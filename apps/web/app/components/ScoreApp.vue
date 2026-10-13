@@ -28,12 +28,13 @@ const scoreNotices = ref<{ id: number; text: string; positive: boolean }[]>([])
 const noticeTimers = new Set<ReturnType<typeof setTimeout>>()
 let noticeId = 0
 const inviteOpen = ref(false)
+const settingsOpen = ref(false)
 const qr = ref('')
 const inviteLink = ref('')
 const elapsed = ref('00:00')
 const giving = ref<ScoreKind | null>(null)
 const confirmation = ref<'end' | 'undo' | 'close' | null>(null)
-const modalOpen = computed(() => inviteOpen.value || !!giving.value || !!confirmation.value)
+const modalOpen = computed(() => inviteOpen.value || settingsOpen.value || !!giving.value || !!confirmation.value)
 let previousFocus: HTMLElement | null = null
 let previousOverflow = ''
 watch(modalOpen, async open => {
@@ -43,18 +44,18 @@ watch(modalOpen, async open => {
     previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     await nextTick()
-    document.querySelector<HTMLElement>('[role="dialog"] button:not(:disabled), [role="dialog"] input')?.focus()
+    document.querySelector<HTMLElement>('[role="dialog"] button:not(:disabled), [role="dialog"] input:not(:disabled)')?.focus()
   } else {
     document.body.style.overflow = previousOverflow
     previousFocus?.focus()
   }
 })
-watch(() => room.value?.status, status => { if (status !== 'playing') giving.value = null })
+watch(() => room.value?.status, status => { if (status !== 'playing') giving.value = null; if (status !== 'waiting') closeSettings() })
 function modalKeys(event: KeyboardEvent) {
   if (!modalOpen.value) return
-  if (event.key === 'Escape') { inviteOpen.value = false; giving.value = null; confirmation.value = null; event.preventDefault() }
+  if (event.key === 'Escape') { inviteOpen.value = false; closeSettings(); giving.value = null; confirmation.value = null; event.preventDefault() }
   if (event.key !== 'Tab') return
-  const nodes = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"] button:not(:disabled), [role="dialog"] input'))
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"] button:not(:disabled), [role="dialog"] input:not(:disabled)'))
   const first = nodes[0], last = nodes.at(-1)
   if (!first || !last) return
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
@@ -142,7 +143,7 @@ function receive(state: PublicRoom) {
   }
   room.value = state
   rememberRoomName(state.code, state.roomName)
-  if (state.status === 'waiting') { roomName.value = state.roomName ?? ''; initialScore.value = state.initialScore; Object.assign(rules, state.rules) }
+  if (state.status === 'waiting' && !(settingsOpen.value && isHost.value)) { roomName.value = state.roomName ?? ''; initialScore.value = state.initialScore; Object.assign(rules, state.rules) }
 }
 function rememberRoomName(code: string, title?: string) {
   const value = saved.value.find(s => s.code === code)
@@ -250,8 +251,25 @@ async function move(index: number) {
   ;[order[index - 1], order[index]] = [order[index]!, order[index - 1]!]
   await command({ type: 'configure', initialScore: initialScore.value, rules: { ...rules }, order })
 }
+function restoreSettings() {
+  if (!room.value) return
+  roomName.value = room.value.roomName ?? ''
+  initialScore.value = room.value.initialScore
+  Object.assign(rules, room.value.rules)
+}
+function openSettings() {
+  if (room.value?.status !== 'waiting') return
+  restoreSettings()
+  settingsOpen.value = true
+}
+function closeSettings() {
+  settingsOpen.value = false
+  restoreSettings()
+}
 async function configure() {
+  if (!isHost.value || room.value?.status !== 'waiting' || busy.value || !connected.value || pending.value) return
   await command({ type: 'configure', roomName: roomName.value, initialScore: initialScore.value, rules: { ...rules }, order: room.value!.members.map(p => p.id) })
+  if (!error.value && !pending.value) closeSettings()
 }
 function back() {
   if (busy.value || pending.value) return
@@ -369,7 +387,7 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
           </section>
 
           <section v-if="room.status === 'waiting'" class="lobby-ready"><p>{{ room.members.length === capacity ? '球友到齐了，确认座位顺序后开局。' : `还差 ${capacity - room.members.length} 位球友，点空位邀请加入。` }}</p><button v-if="isHost" class="primary full" type="button" :disabled="room.members.length !== capacity || busy || !connected || !!pending" @click="command({ type: 'start' })">{{ room.members.length === capacity ? `${capacity === 2 ? '两人' : '三人'}到齐，开始追分` : `等待${capacity === 2 ? '两人' : '三人'}到齐` }}</button><p v-else class="muted">由房主确认并开始追分。</p></section>
-          <DisclosurePanel v-if="room.status === 'waiting'" class="settings-panel" :action="isHost ? '修改' : '查看'"><template #title>房间与开局设置</template><div class="section-label"><h2>开局规则</h2><span>{{ isHost ? '房主可以调整' : '由房主设置' }}</span></div><form @submit.prevent="configure"><label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="留空则只显示房间号" :disabled="!isHost" /></label><div class="settings-grid"><label class="field">初始积分<input v-model.number="initialScore" type="number" min="1" max="10000" :disabled="!isHost" required /></label><label v-for="(label, kind) in labels" :key="kind" class="field">{{ label }}<input v-model.number="rules[kind]" type="number" min="1" max="100" :disabled="!isHost" required /></label></div><p class="rule-help">{{ capacity === 2 ? '所有按钮只扣自己的分、给对手加分。犯规给对手；其他按钮按赢家的普胜、小金、大金或黄金九支付一份分值。' : '所有按钮只扣自己的分。犯规自动给上家；其他按钮选择赢家给分。大金、黄金9由上下家分别给分。默认大金每人给 10 分，赢家共得 20 分；黄金9每人给 4 分，赢家共得 8 分。' }}允许积分低于零。</p><div v-if="isHost" class="lobby-actions"><button class="secondary" :disabled="busy || !connected || !!pending" type="submit">保存设置</button></div><p v-else class="muted">大家确认顺序和规则后，由房主开始。</p></form></DisclosurePanel>
+          <button v-if="room.status === 'waiting'" class="settings-entry" type="button" aria-haspopup="dialog" @click="openSettings"><span class="settings-entry-title"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 17h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="7" y="4" width="4" height="6" rx="2" fill="currentColor"/><rect x="14" y="14" width="4" height="6" rx="2" fill="currentColor"/></svg>房间与开局设置</span><span>{{ isHost ? '修改' : '查看' }} ↗</span></button>
 
           <section v-if="room.status === 'closed'" class="finished-panel"><span class="eyebrow">房主已关闭房间</span><h2>下次约球，再开一桌。</h2><p>这个房间无法再加入或开始追分。</p><button class="primary" @click="back">回首页，再开一桌 →</button></section>
           <section v-if="room.status === 'ended'" class="finished-panel"><span class="eyebrow">本场结束</span><h2>比分已保存，下次继续约。</h2><p>本场共记分 {{ activeEvents.length }} 笔，用时 {{ elapsed }}。每个人都能回到房间查看记录。</p><button class="primary" @click="back">回首页，再开一桌 →</button></section>
@@ -382,6 +400,7 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
     <footer class="site-footer" :inert="modalOpen"><span>追分 · 和球友一起记分</span><span>专注下一杆</span></footer>
 
     <div v-if="inviteOpen" class="modal-backdrop" @click.self="inviteOpen = false"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="invite-title"><button class="close-modal" aria-label="关闭邀请" @click="inviteOpen = false">×</button><span class="eyebrow">给球友留个位置</span><h2 id="invite-title">扫码，加入这一桌</h2><p>球友用自己的手机扫码打开</p><img :src="qr" alt="加入房间的二维码" width="240" height="240" /><p v-if="room?.roomName" class="invite-room-name">{{ room.roomName }}</p><div class="invite-code">{{ room?.code }}</div><p>也可以在首页输入房间号加入</p><input class="share-link" :value="inviteLink" aria-label="邀请链接" readonly @focus="($event.target as HTMLInputElement).select()" /><button class="primary full" @click="copyInvite">复制邀请链接 ↗</button><p v-if="notice" role="status">{{ notice }}</p></section></div>
+    <div v-if="settingsOpen && room" class="modal-backdrop" @click.self="closeSettings"><section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><button class="close-modal" aria-label="关闭房间设置" @click="closeSettings">×</button><span class="eyebrow">{{ isHost ? '开局前可以调整' : '由房主设置' }}</span><h2 id="settings-title">房间与开局设置</h2><p class="settings-description">{{ isHost ? '设置好房间和分值，保存后整桌同步。' : '查看本桌规则，只有房主可以修改。' }}</p><form @submit.prevent="configure"><label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="留空则只显示房间号" :disabled="!isHost || busy || !!pending" /></label><div class="settings-grid"><label class="field">初始积分<input v-model.number="initialScore" type="number" min="1" max="10000" :disabled="!isHost || busy || !!pending" required /></label><label v-for="(label, kind) in labels" :key="kind" class="field">{{ label }}{{ kind === 'golden9' || kind === 'dajin' ? '（每位输家）' : '' }}<input v-model.number="rules[kind]" type="number" min="1" max="100" :disabled="!isHost || busy || !!pending" required /></label></div><p class="rule-help">{{ capacity === 2 ? '所有按钮只扣自己的分、给对手加分。犯规给对手；其他按钮按赢家的普胜、小金、大金或黄金九支付一份分值。' : '所有按钮只扣自己的分。犯规自动给上家；其他按钮选择赢家给分。大金、黄金9由上下家分别给分。默认大金每人给 10 分，赢家共得 20 分；黄金9每人给 4 分，赢家共得 8 分。' }}允许积分低于零。</p><p v-if="error" class="error" role="alert">{{ error }}<button v-if="pending" type="button" :disabled="busy || !connected" @click="retry">重试这笔操作</button></p><div v-if="isHost" class="lobby-actions"><button class="primary full" :disabled="busy || !connected || !!pending" type="submit">{{ busy ? '正在保存…' : '保存设置' }}</button></div><button v-else class="secondary full" type="button" @click="closeSettings">知道了</button></form></section></div>
     <div v-if="giving" class="modal-backdrop" @click.self="giving = null"><section class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="give-title"><h2 id="give-title">这笔分给谁？</h2><p>{{ labels[giving] }}：从你的积分扣 {{ scoreValue(giving) }} 分，给选中的球友。</p><div class="recipient-actions"><button v-for="player in room?.members.filter(p => p.id !== session?.playerId)" :key="player.id" class="primary full" :disabled="busy || !connected || !!pending || room?.status !== 'playing'" @click="giveTo(player.id)">给 {{ player.name }} {{ scoreValue(giving) }} 分</button><button class="secondary full" @click="giving = null">取消给分</button></div></section></div>
     <div v-if="confirmation" class="modal-backdrop" @click.self="confirmation = null"><section class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><h2 id="confirm-title">{{ confirmation === 'undo' ? '撤销上一笔记分？' : confirmation === 'close' ? '关闭这个房间？' : '结束这场追分？' }}</h2><p>{{ confirmation === 'undo' ? '这一笔的所有积分变化会一起还原，记录保留并标记为已撤销。' : confirmation === 'close' ? '关闭后无法加入或开局，所有球友都会看到房间已关闭。' : '结束后保留比分和操作记录，这一场将无法继续记分。' }}</p><div class="confirm-actions"><button class="secondary" @click="confirmation = null">再想想</button><button class="primary" @click="confirmAction">{{ confirmation === 'undo' ? '确认撤销' : confirmation === 'close' ? '确认关闭' : '确认结束' }}</button></div></section></div>
   </div>

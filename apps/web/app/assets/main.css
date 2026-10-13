@@ -240,3 +240,14 @@ summary::-webkit-details-marker { display: none; }
 
 @media (max-width:760px) { .score-actions { gap: 10px; }.score-card-label { font-size: 12px; }.score-card-amount { font-size: 10px; } }
 @media (max-width:360px) { .score-actions { gap: 8px; }.score-card-label { font-size: 11px; } }
+
+.settings-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 64px; margin-top: 20px; padding: 16px 20px; border-radius: 18px; background: var(--surface); color: var(--ink); text-align: left; }
+.settings-entry-title { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 650; }
+.settings-entry-title svg { width: 21px; height: 21px; color: var(--green); }
+.settings-entry > span:last-child { font-size: 13px; color: var(--green); flex-shrink: 0; }
+.settings-modal { width: 540px; text-align: left; }
+.settings-modal .settings-description { margin-bottom: 24px; }
+.settings-modal .rule-help { font-size: 12px; margin-bottom: 20px; }
+.settings-modal .settings-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.settings-modal .field { font-size: 13px; }
+@media (max-width:760px) { .settings-modal { width: 100%; }.settings-entry { padding: 16px; }.settings-entry-title { font-size: 14px; } }
