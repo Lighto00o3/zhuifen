@@ -53,14 +53,14 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
-      - name: Upload Playwright report
-        if: failure()
+      # test-results 只保留失败过的尝试（包括重试后才通过的），有内容时才上传，便于排查偶发失败。
+      - name: Upload Playwright traces
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: |
-            playwright-report
-            test-results
+          name: playwright-traces
+          path: test-results
+          if-no-files-found: ignore
           retention-days: 7
       - run: npm run build
       - run: npm run generate -w @zhuifen/web

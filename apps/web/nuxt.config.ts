@@ -4,7 +4,8 @@ export default defineNuxtConfig({
   ssr: process.env.NUXT_SPA !== 'true',
   runtimeConfig: { public: { apiOrigin: '' } },
   vite: {
-    optimizeDeps: { include: ['qrcode', 'socket.io-client'] },
+    // 开发时预先打包这些依赖；否则首次打开页面时 Vite 才发现它们，会重新打包并强制刷新所有页面（端到端测试会因此偶发失败）。
+    optimizeDeps: { include: ['gsap', 'qrcode', 'socket.io-client'] },
   },
   css: ['~/assets/main.css'],
   modules: [
