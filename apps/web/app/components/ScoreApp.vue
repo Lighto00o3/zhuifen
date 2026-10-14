@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { io, type Socket } from 'socket.io-client'
 import QRCode from 'qrcode'
-import { pointCards } from '../utils/pointCards'
+import { CARD_SUITS, pointCards } from '../utils/pointCards'
+import { clockTime, formatElapsed } from '../utils/format'
 import { cacheOnlineGames } from '../utils/gameHistory'
 import { randomHex, randomId } from '../utils/random'
-import type { PlayerCount, PublicRoom, Rules, ScoreKind, Session } from '../../../api/src/model'
+import { DEFAULT_RULES, LABELS, type PlayerCount, type PublicRoom, type Rules, type ScoreKind, type Session } from '../../../api/src/model'
 
 const route = useRoute()
 const router = useRouter()
 
 const apiOrigin = useRuntimeConfig().public.apiOrigin.replace(/\/$/, '')
-const labels: Record<ScoreKind, string> = { foul: '犯规', normal: '普胜', xiaojin: '小金', dajin: '大金', golden9: '黄金9' }
 const room = ref<PublicRoom | null>(null)
 const session = ref<Session | null>(null)
 const saved = ref<Session[]>([])
@@ -20,7 +20,7 @@ const roomCode = ref('')
 const tab = ref<'create' | 'join'>('create')
 const initialScore = ref(100)
 const playerCount = ref<PlayerCount>(3)
-const rules = reactive<Rules>({ foul: 1, normal: 4, xiaojin: 7, dajin: 10, golden9: 4 })
+const rules = reactive<Rules>({ ...DEFAULT_RULES })
 const busy = ref(false)
 const connected = ref(false)
 const error = ref('')
@@ -87,8 +87,7 @@ const activeEvents = computed(() => room.value?.events.filter(e => !e.undoneAt) 
 const totalScore = computed(() => room.value?.members.reduce((sum, p) => sum + p.score, 0) ?? 0)
 const capacity = computed(() => room.value?.playerCount ?? 3)
 const modeLabel = computed(() => capacity.value === 2 ? '双人追分' : '三人追分')
-const scoreCards = computed(() => Object.fromEntries(Object.keys(labels).map(kind => [kind, pointCards(scoreValue(kind as ScoreKind))])) as Record<ScoreKind, ReturnType<typeof pointCards>>)
-const cardSuits: Record<ScoreKind, string> = { foul: '♠', normal: '♠', xiaojin: '♥', dajin: '♣', golden9: '♦' }
+const scoreCards = computed(() => Object.fromEntries(Object.keys(LABELS).map(kind => [kind, pointCards(scoreValue(kind as ScoreKind))])) as Record<ScoreKind, ReturnType<typeof pointCards>>)
 function scoreValue(kind: ScoreKind) {
   if (!room.value) return 0
   return room.value.rules[kind]
@@ -136,7 +135,7 @@ function receive(state: PublicRoom) {
           transfers.value?.enqueue({ id: `${event.id}-${undone}`, from: payer[0], to: receiver[0],
             fromName: state.members.find(p => p.id === payer[0])?.name ?? '球友',
             toName: state.members.find(p => p.id === receiver[0])?.name ?? '球友',
-            points: receiver[1], mine: playerId, undo: undone, suit: cardSuits[event.kind] })
+            points: receiver[1], mine: playerId, undo: undone, suit: CARD_SUITS[event.kind] })
           continue
         }
         const delta = (event.deltas[playerId] ?? 0) * (undone ? -1 : 1)
@@ -288,7 +287,6 @@ async function copyInvite() {
   catch { notice.value = '长按下方链接即可复制' }
 }
 function person(id: string) { return room.value?.members.find(p => p.id === id)?.name ?? '球友' }
-function time(value: string) { return new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }
 async function confirmAction() {
   const action = confirmation.value; confirmation.value = null
   if (action === 'close') await command({ type: 'close' })
@@ -307,9 +305,7 @@ onMounted(() => {
     if (existing) void resume(existing)
   }
   timer = setInterval(() => {
-    if (!room.value?.startedAt) { elapsed.value = '00:00'; return }
-    const seconds = Math.max(0, Math.floor(((room.value.endedAt ? Date.parse(room.value.endedAt) : Date.now()) - Date.parse(room.value.startedAt)) / 1000))
-    elapsed.value = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+    elapsed.value = formatElapsed(room.value?.startedAt, room.value?.endedAt)
   }, 1000)
 })
 onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalOpen.value) document.body.style.overflow = previousOverflow; socket?.disconnect(); if (timer) clearInterval(timer); noticeTimers.forEach(clearTimeout) })
@@ -378,9 +374,9 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
           <section v-if="room.status === 'playing'" class="action-panel">
             <div class="section-label"><h2>我来给分</h2><span>点一张牌，给球友分</span></div>
             <div class="score-actions">
-              <button v-for="(label, kind, index) in labels" :key="kind" :class="['score-action', kind]" :style="{ '--card-tilt': `${(index - 2) * 3}deg` }" :aria-label="`${kind === 'foul' ? label : `给${label}`}，${scoreValue(kind)} 分，${scoreHint(kind)}`" :disabled="busy || !connected || !!pending" @click="give(kind)">
+              <button v-for="(label, kind, index) in LABELS" :key="kind" :class="['score-action', kind]" :style="{ '--card-tilt': `${(index - 2) * 3}deg` }" :aria-label="`${kind === 'foul' ? label : `给${label}`}，${scoreValue(kind)} 分，${scoreHint(kind)}`" :disabled="busy || !connected || !!pending" @click="give(kind)">
                 <span class="score-card-stack" aria-hidden="true">
-                  <span v-for="(card, cardIndex) in scoreCards[kind].slice(0, 3)" :key="cardIndex" class="score-card-face" :style="{ '--stack-offset': `${cardIndex * 3}px`, zIndex: 3 - cardIndex }"><PlayingCard :value="card.value" :face="card.rank" :suit="cardSuits[kind]" /></span>
+                  <span v-for="(card, cardIndex) in scoreCards[kind].slice(0, 3)" :key="cardIndex" class="score-card-face" :style="{ '--stack-offset': `${cardIndex * 3}px`, zIndex: 3 - cardIndex }"><PlayingCard :value="card.value" :face="card.rank" :suit="CARD_SUITS[kind]" /></span>
                 </span>
                 <span class="score-card-label">{{ label }}</span>
                 <span class="score-card-amount">−{{ scoreValue(kind) }} 分<span v-if="scoreCards[kind].length > 1"> · {{ scoreCards[kind].length }} 张</span></span>
@@ -398,14 +394,14 @@ onUnmounted(() => { window.removeEventListener('keydown', modalKeys); if (modalO
           <div class="room-summary"><span>全桌总分 <b>{{ totalScore }}</b> · {{ room.startingScores ? '按本局开局积分计算输赢' : `每人初始 ${room.initialScore}` }}</span></div>
         </section>
 
-        <aside class="history-panel"><div class="section-label"><h2>本场记录</h2><span>{{ room.events.length }} 笔</span></div><div v-if="!room.events.length" class="empty-history"><span>↗</span><h3>好球，从第一杆开始</h3><p>每次记分和积分变化<br />都会留在这里。</p></div><ol v-else class="event-list"><li v-for="event in [...room.events].reverse()" :key="event.id" :class="{ undone: event.undoneAt }"><div class="event-heading"><b>{{ person(event.actorId) }} · {{ event.label }}</b><time>{{ time(event.createdAt) }}</time></div><div class="event-deltas"><span v-for="(delta, id) in event.deltas" v-show="delta !== 0" :key="id">{{ person(String(id)) }} <b :class="delta > 0 ? 'positive' : 'negative'">{{ delta > 0 ? '+' : '' }}{{ delta }}</b></span></div><span v-if="event.undoneAt" class="undo-label">已撤销</span></li></ol><div class="history-foot"><i /> 所有球友查看同一份记录</div></aside>
+        <aside class="history-panel"><div class="section-label"><h2>本场记录</h2><span>{{ room.events.length }} 笔</span></div><div v-if="!room.events.length" class="empty-history"><span>↗</span><h3>好球，从第一杆开始</h3><p>每次记分和积分变化<br />都会留在这里。</p></div><ol v-else class="event-list"><li v-for="event in [...room.events].reverse()" :key="event.id" :class="{ undone: event.undoneAt }"><div class="event-heading"><b>{{ person(event.actorId) }} · {{ event.label }}</b><time>{{ clockTime(event.createdAt) }}</time></div><div class="event-deltas"><span v-for="(delta, id) in event.deltas" v-show="delta !== 0" :key="id">{{ person(String(id)) }} <b :class="delta > 0 ? 'positive' : 'negative'">{{ delta > 0 ? '+' : '' }}{{ delta }}</b></span></div><span v-if="event.undoneAt" class="undo-label">已撤销</span></li></ol><div class="history-foot"><i /> 所有球友查看同一份记录</div></aside>
       </div>
     </main>
     <footer class="site-footer" :inert="modalOpen"><span>追分 · 和球友一起记分</span><span>专注下一杆</span></footer>
 
     <div v-if="inviteOpen" class="modal-backdrop" @click.self="inviteOpen = false"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="invite-title"><button class="close-modal" aria-label="关闭邀请" @click="inviteOpen = false">×</button><span class="eyebrow">给球友留个位置</span><h2 id="invite-title">扫码，加入这一桌</h2><p>球友用自己的手机扫码打开</p><img :src="qr" alt="加入房间的二维码" width="240" height="240" /><p v-if="room?.roomName" class="invite-room-name">{{ room.roomName }}</p><div class="invite-code">{{ room?.code }}</div><p>也可以在首页输入房间号加入</p><input class="share-link" :value="inviteLink" aria-label="邀请链接" readonly @focus="($event.target as HTMLInputElement).select()" /><button class="primary full" @click="copyInvite">复制邀请链接 ↗</button><p v-if="notice" role="status">{{ notice }}</p></section></div>
-    <div v-if="settingsOpen && room" class="modal-backdrop" @click.self="closeSettings"><section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><button class="close-modal" aria-label="关闭房间设置" @click="closeSettings">×</button><span class="eyebrow">{{ isHost ? '开局前可以调整' : '由房主设置' }}</span><h2 id="settings-title">房间与开局设置</h2><p class="settings-description">{{ isHost ? '设置好房间和分值，保存后整桌同步。' : '查看本桌规则，只有房主可以修改。' }}</p><form @submit.prevent="configure"><label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="留空则只显示房间号" :disabled="!isHost || busy || !!pending" /></label><div class="settings-grid"><label class="field">初始积分<input v-model.number="initialScore" type="number" min="1" max="10000" :disabled="!isHost || busy || !!pending" required /></label><label v-for="(label, kind) in labels" :key="kind" class="field">{{ label }}{{ kind === 'golden9' || kind === 'dajin' ? '（每位输家）' : '' }}<input v-model.number="rules[kind]" type="number" min="1" max="100" :disabled="!isHost || busy || !!pending" required /></label></div><p class="rule-help">{{ capacity === 2 ? '所有按钮只扣自己的分、给对手加分。犯规给对手；其他按钮按赢家的普胜、小金、大金或黄金九支付一份分值。' : '所有按钮只扣自己的分。犯规自动给上家；其他按钮选择赢家给分。大金、黄金9由上下家分别给分。默认大金每人给 10 分，赢家共得 20 分；黄金9每人给 4 分，赢家共得 8 分。' }}允许积分低于零。</p><p v-if="error" class="error" role="alert">{{ error }}<button v-if="pending" type="button" :disabled="busy || !connected" @click="retry">重试这笔操作</button></p><div v-if="isHost" class="lobby-actions"><button class="primary full" :disabled="busy || !connected || !!pending" type="submit">{{ busy ? '正在保存…' : '保存设置' }}</button></div><button v-else class="secondary full" type="button" @click="closeSettings">知道了</button></form></section></div>
-    <div v-if="giving" class="modal-backdrop" @click.self="giving = null"><section class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="give-title"><h2 id="give-title">这笔分给谁？</h2><p>{{ labels[giving] }}：从你的积分扣 {{ scoreValue(giving) }} 分，给选中的球友。</p><div class="recipient-actions"><button v-for="player in room?.members.filter(p => p.id !== session?.playerId)" :key="player.id" class="primary full" :disabled="busy || !connected || !!pending || room?.status !== 'playing'" @click="giveTo(player.id)">给 {{ player.name }} {{ scoreValue(giving) }} 分</button><button class="secondary full" @click="giving = null">取消给分</button></div></section></div>
+    <div v-if="settingsOpen && room" class="modal-backdrop" @click.self="closeSettings"><section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><button class="close-modal" aria-label="关闭房间设置" @click="closeSettings">×</button><span class="eyebrow">{{ isHost ? '开局前可以调整' : '由房主设置' }}</span><h2 id="settings-title">房间与开局设置</h2><p class="settings-description">{{ isHost ? '设置好房间和分值，保存后整桌同步。' : '查看本桌规则，只有房主可以修改。' }}</p><form @submit.prevent="configure"><label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="留空则只显示房间号" :disabled="!isHost || busy || !!pending" /></label><div class="settings-grid"><label class="field">初始积分<input v-model.number="initialScore" type="number" min="1" max="10000" :disabled="!isHost || busy || !!pending" required /></label><label v-for="(label, kind) in LABELS" :key="kind" class="field">{{ label }}{{ kind === 'golden9' || kind === 'dajin' ? '（每位输家）' : '' }}<input v-model.number="rules[kind]" type="number" min="1" max="100" :disabled="!isHost || busy || !!pending" required /></label></div><p class="rule-help">{{ capacity === 2 ? '所有按钮只扣自己的分、给对手加分。犯规给对手；其他按钮按赢家的普胜、小金、大金或黄金九支付一份分值。' : '所有按钮只扣自己的分。犯规自动给上家；其他按钮选择赢家给分。大金、黄金9由上下家分别给分。默认大金每人给 10 分，赢家共得 20 分；黄金9每人给 4 分，赢家共得 8 分。' }}允许积分低于零。</p><p v-if="error" class="error" role="alert">{{ error }}<button v-if="pending" type="button" :disabled="busy || !connected" @click="retry">重试这笔操作</button></p><div v-if="isHost" class="lobby-actions"><button class="primary full" :disabled="busy || !connected || !!pending" type="submit">{{ busy ? '正在保存…' : '保存设置' }}</button></div><button v-else class="secondary full" type="button" @click="closeSettings">知道了</button></form></section></div>
+    <div v-if="giving" class="modal-backdrop" @click.self="giving = null"><section class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="give-title"><h2 id="give-title">这笔分给谁？</h2><p>{{ LABELS[giving] }}：从你的积分扣 {{ scoreValue(giving) }} 分，给选中的球友。</p><div class="recipient-actions"><button v-for="player in room?.members.filter(p => p.id !== session?.playerId)" :key="player.id" class="primary full" :disabled="busy || !connected || !!pending || room?.status !== 'playing'" @click="giveTo(player.id)">给 {{ player.name }} {{ scoreValue(giving) }} 分</button><button class="secondary full" @click="giving = null">取消给分</button></div></section></div>
     <div v-if="confirmation" class="modal-backdrop" @click.self="confirmation = null"><section class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><h2 id="confirm-title">{{ confirmation === 'restart' ? '同一桌，再开一局？' : confirmation === 'undo' ? '撤销上一笔记分？' : confirmation === 'close' ? '关闭这个房间？' : '结束这场追分？' }}</h2><p>{{ confirmation === 'restart' ? '沿用球友、座位和规则，上一场比分和记录会保留。' : confirmation === 'undo' ? '这一笔的所有积分变化会一起还原，记录保留并标记为已撤销。' : confirmation === 'close' ? '关闭后无法加入或开局，所有球友都会看到房间已关闭。' : '结束后保留比分和操作记录，房主可以再开下一局。' }}</p><div v-if="confirmation === 'restart'" class="rematch-options"><button class="secondary full" :aria-pressed="!carry" @click="carry = false">重置积分 · 每人 {{ room?.initialScore }} 分</button><button class="secondary full" :aria-pressed="carry" @click="carry = true">接着上一场的积分</button></div><div class="confirm-actions"><button class="secondary" @click="confirmation = null">再想想</button><button class="primary" @click="confirmAction">{{ confirmation === 'restart' ? '开始下一局' : confirmation === 'undo' ? '确认撤销' : confirmation === 'close' ? '确认关闭' : '确认结束' }}</button></div></section></div>
   </div>
 </template>

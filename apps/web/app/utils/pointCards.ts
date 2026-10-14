@@ -1,3 +1,6 @@
+import type { ScoreKind } from '../../../api/src/model'
+
+export const CARD_SUITS: Record<ScoreKind, string> = { foul: '♠', normal: '♠', xiaojin: '♥', dajin: '♣', golden9: '♦' }
 // Visual denominations only: no hand inventory or change-making yet.
 export function pointCards(points: number): { rank: string; value: number }[] {
   const cards: { rank: string; value: number }[] = []

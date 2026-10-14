@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { DEFAULT_RULES, LABELS, type Rules, type ScoreKind } from '../../../api/src/model'
 import { createLocalGame, giveLocal, undoLocal, loadLocalGames, storeLocalGame, rematchLocal, LOCAL_GAME_KEY, LOCAL_GAMES_KEY, type LocalGame } from '../utils/localGame'
-import { pointCards } from '../utils/pointCards'
+import { CARD_SUITS, pointCards } from '../utils/pointCards'
+import { clockTime, formatElapsed } from '../utils/format'
 import { randomId } from '../utils/random'
 import type { Transfer } from '../components/CardTransfer.vue'
 
@@ -33,13 +34,10 @@ const transfers = ref<{ enqueue: (t: Transfer) => void } | null>(null)
 const last = computed(() => game.value?.events.findLast(e => !e.undoneAt))
 const selected = computed(() => game.value?.members.find(p => p.id === payer.value))
 const recipients = computed(() => game.value?.members.filter(p => p.id !== payer.value) ?? [])
-const suits: Record<ScoreKind, string> = { foul: '♠', normal: '♠', xiaojin: '♥', dajin: '♣', golden9: '♦' }
 const elapsed = ref('00:00')
 let timer: ReturnType<typeof setInterval> | undefined
 function tick() {
-  if (!game.value) return
-  const seconds = Math.max(0, Math.floor(((game.value.endedAt ? Date.parse(game.value.endedAt) : Date.now()) - Date.parse(game.value.startedAt)) / 1000))
-  elapsed.value = `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`
+  if (game.value) elapsed.value = formatElapsed(game.value.startedAt, game.value.endedAt)
 }
 function save(next: LocalGame) {
   // Persist before accepting a change, so a storage failure never silently loses a score.
@@ -74,7 +72,7 @@ function give(recipientId?: string) {
 function animate(deltas: Record<string, number>, undo: boolean) {
   const entries = Object.entries(deltas).map(([id, d]) => [id, undo ? -d : d] as const)
   const from = entries.find(([, d]) => d < 0), to = entries.find(([, d]) => d > 0)
-  if (from && to) transfers.value?.enqueue({ id: randomId(), from: from[0], to: to[0], fromName: person(from[0]), toName: person(to[0]), points: to[1], undo, suit: suits[kind.value] })
+  if (from && to) transfers.value?.enqueue({ id: randomId(), from: from[0], to: to[0], fromName: person(from[0]), toName: person(to[0]), points: to[1], undo, suit: CARD_SUITS[kind.value] })
 }
 function confirm() {
   if (!game.value) return
@@ -91,7 +89,6 @@ function confirm() {
   } catch { error.value = '保存失败，请检查浏览器的存储空间后重试。' }
 }
 function person(id: string) { return game.value?.members.find(p => p.id === id)?.name ?? '球友' }
-function time(value: string) { return new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }
 function restore() {
   try {
     const store = loadLocalGames(localStorage)
@@ -140,7 +137,7 @@ onBeforeUnmount(() => { if (action.value) document.body.style.overflow = previou
             <section v-if="!game.endedAt && !historical" class="action-panel">
               <div class="section-label"><h2>谁来给分？</h2><span>先选输家，再点牌</span></div>
               <div class="local-payers" role="group" aria-label="选择给分的人"><button v-for="p in game.members" :key="p.id" :class="{ active: payer === p.id }" :aria-pressed="payer === p.id" @click="payer = p.id">{{ p.name }}</button></div>
-              <div class="score-actions"><button v-for="(label, k, index) in LABELS" :key="k" :class="['score-action', k]" :style="{ '--card-tilt': `${(index - 2) * 3}deg` }" :aria-label="`${selected?.name}给${label} ${game.rules[k]} 分`" @click="choose(k)"><span class="score-card-stack" aria-hidden="true"><span v-for="(card, i) in pointCards(game.rules[k]).slice(0, 3)" :key="i" class="score-card-face" :style="{ '--stack-offset': `${i * 3}px`, zIndex: 3 - i }"><PlayingCard :value="card.value" :face="card.rank" :suit="suits[k]" /></span></span><span class="score-card-label">{{ label }}</span><span class="score-card-amount">−{{ game.rules[k] }} 分</span></button></div>
+              <div class="score-actions"><button v-for="(label, k, index) in LABELS" :key="k" :class="['score-action', k]" :style="{ '--card-tilt': `${(index - 2) * 3}deg` }" :aria-label="`${selected?.name}给${label} ${game.rules[k]} 分`" @click="choose(k)"><span class="score-card-stack" aria-hidden="true"><span v-for="(card, i) in pointCards(game.rules[k]).slice(0, 3)" :key="i" class="score-card-face" :style="{ '--stack-offset': `${i * 3}px`, zIndex: 3 - i }"><PlayingCard :value="card.value" :face="card.rank" :suit="CARD_SUITS[k]" /></span></span><span class="score-card-label">{{ label }}</span><span class="score-card-amount">−{{ game.rules[k] }} 分</span></button></div>
               <p class="card-rule-note">{{ game.members.length === 3 ? `犯规给上家；大金每位输家给 ${game.rules.dajin} 分，黄金9每位输家给 ${game.rules.golden9} 分，请分别记两笔。` : '犯规给对手；其他牌按赢家的得分支付一份。' }}</p>
               <div class="action-footer"><span>当前给分：{{ selected?.name }}</span><button class="text-button" :disabled="!last" @click="open('undo')">↶ 撤销上一笔</button></div>
             </section>
@@ -148,7 +145,7 @@ onBeforeUnmount(() => { if (action.value) document.body.style.overflow = previou
             <div class="room-summary"><span>全桌总分 <b>{{ game.members.reduce((sum, p) => sum + p.score, 0) }}</b> · {{ game.startingScores ? '沿用上一场积分' : `每人初始 ${game.initialScore}` }}</span></div>
             <p class="local-save-note">已保存在本机 · 不与其他手机同步<br />清除浏览器数据会删除记录，请使用同一浏览器继续。</p>
           </section>
-          <aside class="history-panel"><div class="section-label"><h2>本场记录</h2><span>{{ game.events.length }} 笔</span></div><div v-if="!game.events.length" class="empty-history"><h3>从第一笔给分开始</h3><p>选择输家和分值，比分会自动更新。</p></div><ol v-else class="event-list"><li v-for="event in [...game.events].reverse()" :key="event.id" :class="{ undone: event.undoneAt }"><div class="event-heading"><b>{{ person(event.actorId) }} · {{ event.label }}</b><time>{{ time(event.createdAt) }}</time></div><div class="event-deltas"><span v-for="(delta, id) in event.deltas" v-show="delta !== 0" :key="id">{{ person(String(id)) }} <b :class="delta > 0 ? 'positive' : 'negative'">{{ delta > 0 ? '+' : '' }}{{ delta }}</b></span></div><span v-if="event.undoneAt" class="undo-label">已撤销</span></li></ol></aside>
+          <aside class="history-panel"><div class="section-label"><h2>本场记录</h2><span>{{ game.events.length }} 笔</span></div><div v-if="!game.events.length" class="empty-history"><h3>从第一笔给分开始</h3><p>选择输家和分值，比分会自动更新。</p></div><ol v-else class="event-list"><li v-for="event in [...game.events].reverse()" :key="event.id" :class="{ undone: event.undoneAt }"><div class="event-heading"><b>{{ person(event.actorId) }} · {{ event.label }}</b><time>{{ clockTime(event.createdAt) }}</time></div><div class="event-deltas"><span v-for="(delta, id) in event.deltas" v-show="delta !== 0" :key="id">{{ person(String(id)) }} <b :class="delta > 0 ? 'positive' : 'negative'">{{ delta > 0 ? '+' : '' }}{{ delta }}</b></span></div><span v-if="event.undoneAt" class="undo-label">已撤销</span></li></ol></aside>
         </div>
       </template>
     </main>
