@@ -1,4 +1,4 @@
-import { DEFAULT_RULES, LABELS, scoreDeltas, type Player, type Rules, type ScoreEvent, type ScoreKind } from '../../../api/src/model'
+import { DEFAULT_RULES, LABELS, scoreDeltas, type Player, type Rules, type ScoreEvent, type ScoreKind } from '@zhuifen/shared'
 import { randomId } from './random'
 
 export interface LocalGame {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DEFAULT_RULES, type PublicRoom, type ScoreEvent, type Session } from '../../api/src/model'
+import { DEFAULT_RULES, type PublicRoom, type ScoreEvent, type Session } from '@zhuifen/shared'
 import { createApi, errorCode, errorStatus } from '../app/utils/api'
 import { roomChanges } from '../app/utils/roomChanges'
 import { addSession, forgetSessions, loadSessions, MAX_SESSIONS, pendingKey, SESSIONS_KEY } from '../app/utils/sessions'

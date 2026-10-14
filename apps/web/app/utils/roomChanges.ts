@@ -1,4 +1,4 @@
-import type { PublicRoom } from '../../../api/src/model'
+import type { PublicRoom } from '@zhuifen/shared'
 import type { Transfer } from '../components/CardTransfer.vue'
 import { CARD_SUITS } from './pointCards'
 

@@ -1,0 +1,9 @@
+{
+  // 后端运行编译后的 CommonJS（dist），前端直接使用 src 源码，见 package.json 的 exports。
+  "compilerOptions": {
+    "target": "ES2023", "module": "CommonJS", "moduleResolution": "Node",
+    "strict": true, "skipLibCheck": true, "declaration": true,
+    "rootDir": "src", "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"]
+}

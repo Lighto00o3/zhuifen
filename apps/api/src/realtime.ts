@@ -2,7 +2,7 @@ import { Inject } from '@nestjs/common';
 import { ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { corsOrigins } from './env';
-import { PublicRoom, RoomState } from './model';
+import { PublicRoom, RoomState } from '@zhuifen/shared';
 import { authenticate, object, Rooms } from './rooms';
 
 @WebSocketGateway({ cors: { origin: corsOrigins }, maxHttpBufferSize: 4096 })

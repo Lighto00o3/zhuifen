@@ -1,4 +1,4 @@
-import type { PublicRoom, RoundRecord } from '../../../api/src/model'
+import type { PublicRoom, RoundRecord } from '@zhuifen/shared'
 import type { LocalGame } from './localGame'
 export interface HistoryGame extends LocalGame { mode: 'local' | 'online'; code?: string }
 export const ONLINE_HISTORY_KEY = 'zhuifen:online-history:v1'

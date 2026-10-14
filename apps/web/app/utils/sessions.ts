@@ -1,4 +1,4 @@
-import type { Session } from '../../../api/src/model'
+import type { Session } from '@zhuifen/shared'
 
 type ReadStorage = Pick<Storage, 'getItem'>
 type WriteStorage = Pick<Storage, 'setItem' | 'removeItem'>

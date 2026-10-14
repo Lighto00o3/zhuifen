@@ -88,19 +88,26 @@ API 启动时自动创建 `rooms` 与 `room_commands` 两张表。不会扫描�
 ## 开发结构
 
 ```text
+packages/
+  shared/              前后端共用：类型、计分规则与 scoreDeltas（@zhuifen/shared）
+    src/index.ts       前端直接使用源码；后端使用 npm run build 编译出的 dist
+    test/              计分规则测试
 apps/
   api/
-    src/model.ts       规则、类型与纯计分函数
     src/rooms.ts       房间生命周期、事务、鉴权和命令去重
-    src/database.ts    数据库连接与建表
+    src/database.ts    数据库连接与过期房间清理
+    src/migrations.ts  按版本号执行的数据库迁移
     src/realtime.ts    WebSocket 订阅、广播、在线状态
-    src/controller.ts HTTP 接口
+    src/limiter.ts     创建与加入房间的限流
+    src/controller.ts  HTTP 接口
     src/main.ts        NestJS 启动
-    test/              规则测试与数据库/同步集成测试
+    test/              数据库/同步集成测试与迁移测试
   web/
     app/app.vue        NuxtPage 路由入口
-    app/pages/         首页与房间页面
-    app/components/ScoreApp.vue 房间、邀请、记录、断线与重试
+    app/pages/         首页、房间、单机记分与历史页面
+    app/components/    ScoreApp（首页与房间页）、各个弹窗与动画组件
+    app/composables/   useRoom（房间状态、连接与命令队列）、useModalFocus
+    app/utils/         请求、本机存储、历史缓存等纯函数
     app/assets/main.css 响应式样式
     nuxt.config.ts     开发代理和应用配置
 scripts/run.mjs        项目 Node 运行环境选择

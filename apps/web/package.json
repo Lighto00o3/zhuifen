@@ -13,6 +13,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
+    "@zhuifen/shared": "0.1.0",
     "gsap": "^3.15.0",
     "nuxt": "^4.6.1",
     "qrcode": "^1.5.4",

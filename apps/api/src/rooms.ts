@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Inject, Inj
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { Database } from './database';
 import type { PoolClient } from 'pg';
-import { DEFAULT_RULES, LABELS, Member, PlayerCount, RoomState, RoundRecord, Rules, ScoreKind, scoreDeltas } from './model';
+import { DEFAULT_RULES, LABELS, Member, PlayerCount, RoomState, RoundRecord, Rules, ScoreKind, scoreDeltas } from '@zhuifen/shared';
 
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new BadRequestException('请求格式不正确');

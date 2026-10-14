@@ -2,7 +2,7 @@
 import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { clockTime, formatElapsed } from '../utils/format'
 import { randomHex, randomId } from '../utils/random'
-import { DEFAULT_RULES, LABELS, type PlayerCount, type PublicRoom, type Rules, type ScoreKind, type Session } from '../../../api/src/model'
+import { DEFAULT_RULES, LABELS, type PlayerCount, type PublicRoom, type Rules, type ScoreKind, type Session } from '@zhuifen/shared'
 import type { Transfer } from './CardTransfer.vue'
 import type { ScoreNotice } from '../utils/roomChanges'
 import type { ConfirmAction } from './ConfirmDialog.vue'

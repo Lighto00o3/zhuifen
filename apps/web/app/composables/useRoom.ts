@@ -1,5 +1,5 @@
 import { io, type Socket } from 'socket.io-client'
-import type { PublicRoom, Session } from '../../../api/src/model'
+import type { PublicRoom, Session } from '@zhuifen/shared'
 import { createApi, errorCode, errorStatus } from '../utils/api'
 import { cacheOnlineGames } from '../utils/gameHistory'
 import { randomId } from '../utils/random'

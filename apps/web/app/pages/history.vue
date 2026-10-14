@@ -3,7 +3,7 @@ import { loadLocalGames } from '../utils/localGame'
 import { cacheOnlineGames, ONLINE_HISTORY_KEY, gameDelta, missingRounds, type HistoryGame } from '../utils/gameHistory'
 import { createApi, errorCode } from '../utils/api'
 import { forgetSessions, loadSessions } from '../utils/sessions'
-import type { PublicRoom, RoundRecord } from '../../../api/src/model'
+import type { PublicRoom, RoundRecord } from '@zhuifen/shared'
 useHead({ title: '历史对局 · 追分' })
 const route = useRoute()
 const apiOrigin = useRuntimeConfig().public.apiOrigin.replace(/\/$/, '')

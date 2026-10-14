@@ -1,6 +1,6 @@
 {
   "name": "zhuifen", "version": "0.1.0", "private": true,
-  "workspaces": ["apps/api", "apps/web"],
+  "workspaces": ["packages/shared", "apps/api", "apps/web"],
   "scripts": {
     "dev": "node scripts/run.mjs dev",
     "dev:internal": "concurrently -k -n API,WEB \"npm run dev -w @zhuifen/api\" \"npm run dev -w @zhuifen/web\"",
@@ -9,7 +9,7 @@
     "typecheck": "node scripts/run.mjs typecheck",
     "typecheck:internal": "npm run typecheck --workspaces",
     "test": "node scripts/run.mjs test",
-    "test:internal": "npm run test --workspaces",
+    "test:internal": "npm run test --workspaces --if-present",
     "test:integration": "node scripts/run.mjs test:integration",
     "test:integration:internal": "npm run test:integration -w @zhuifen/api",
     "setup:node": "npm install --prefix .tools --registry=https://registry.npmjs.org/ --no-package-lock --no-audit --no-fund node@24.21.0"

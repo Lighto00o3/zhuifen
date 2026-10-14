@@ -5,8 +5,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { io, Socket } from 'socket.io-client';
 import { createApp } from '../src/main';
 import { Database } from '../src/database';
-import type { PublicRoom, Session } from '../src/model';
-import { DEFAULT_RULES } from '../src/model';
+import type { PublicRoom, Session } from '@zhuifen/shared';
+import { DEFAULT_RULES } from '@zhuifen/shared';
 
 test('三人真实数据库与实时同步：鉴权、并发、去重、撤销、重连、重启恢复', { timeout: 60000 }, async () => {
   let app = await createApp();

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_RULES, Player, scoreDeltas, ScoreKind } from '../src/model';
+import { DEFAULT_RULES, Player, scoreDeltas, ScoreKind } from '../src/index';
 const players: Player[] = [{ id: 'a', name: '甲', score: 100 }, { id: 'b', name: '乙', score: 100 }, { id: 'c', name: '丙', score: 100 }];
 test('犯规扣自己的分，自动给上家，包括首位的环形座位', () => {
   assert.deepEqual(scoreDeltas(players, 'b', 'foul', DEFAULT_RULES), { a: 1, b: -1, c: 0 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DEFAULT_RULES } from '../../api/src/model'
+import { DEFAULT_RULES } from '@zhuifen/shared'
 import { createLocalGame, giveLocal, undoLocal, readLocalGame } from '../app/utils/localGame'
 
 test('三人犯规给上家，黄金9两位输家分别给分，撤销保持总分', () => {

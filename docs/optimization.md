@@ -52,7 +52,7 @@
 
 ## 四、性能
 
-- [x] **10. 房间状态越来越大**
+- [x] **10. 房间状态越来越大**（`3066939`）
   所有局的 `rounds` / `events` 都存在同一个 JSONB 字段里。每记一笔分都要重写整份状态，广播和 GET 也会带上全部历史局。
   已改为：
   - 历史局拆到 `room_rounds` 表（第 2 号迁移），已有房间的历史局在迁移时搬过去；房间状态只保留当前这一局，另记 `roundCount`（已归档的局数）。
@@ -71,8 +71,12 @@
 
 ## 五、可维护性
 
-- [ ] **15. 前端直接引用后端源码**
+- [x] **15. 前端直接引用后端源码**
   前端里写的是 `../../../api/src/model`。建议抽出 `packages/shared` 包，放类型、规则和 `scoreDeltas`。
+  已抽出 `packages/shared`（`@zhuifen/shared`），`apps/api/src/model.ts` 和计分规则测试都移了过去，前后端统一按包名引用。
+  - 前端（Vite / Nuxt）直接使用 TypeScript 源码，不需要构建。
+  - 后端运行的是编译后的 CommonJS，所以要先编译共享包：`apps/api` 的 dev / build / typecheck / test:integration 都会先执行 `npm run build -w @zhuifen/shared`。改了共享包后，后端开发服务需要重启才会生效。
+  - 两个 Dockerfile 都带上了共享包；前端镜像不再需要复制后端代码。
 - [x] **16. 同样的代码写了多份**
   `ScoreApp.vue` 和 `local.vue` 改为共用 `LABELS`、`DEFAULT_RULES`、`CARD_SUITS`（`utils/pointCards.ts`），以及 `formatElapsed` / `clockTime`（`utils/format.ts`）；随机 ID 在 `2b40689` 中已合并。（`9bacf0c`）
 - [x] **17. `ScoreApp.vue` 过大**

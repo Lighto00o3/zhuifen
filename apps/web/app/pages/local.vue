@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DEFAULT_RULES, LABELS, type Rules, type ScoreKind } from '../../../api/src/model'
+import { DEFAULT_RULES, LABELS, type Rules, type ScoreKind } from '@zhuifen/shared'
 import { createLocalGame, giveLocal, undoLocal, loadLocalGames, storeLocalGame, rematchLocal, LOCAL_GAME_KEY, LOCAL_GAMES_KEY, type LocalGame } from '../utils/localGame'
 import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { clockTime, formatElapsed } from '../utils/format'

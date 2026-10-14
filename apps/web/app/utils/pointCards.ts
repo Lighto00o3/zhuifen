@@ -1,4 +1,4 @@
-import type { ScoreKind } from '../../../api/src/model'
+import type { ScoreKind } from '@zhuifen/shared'
 
 export const CARD_SUITS: Record<ScoreKind, string> = { foul: '♠', normal: '♠', xiaojin: '♥', dajin: '♣', golden9: '♦' }
 // Visual denominations only: no hand inventory or change-making yet.

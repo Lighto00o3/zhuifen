@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Player } from '../../../api/src/model'
+import type { Player } from '@zhuifen/shared'
 
 // 三人局普胜、小金等由输家选择收分的球友。
 defineProps<{ label: string; value: number; players: Player[]; disabled: boolean }>()

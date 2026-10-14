@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LABELS, type Rules } from '../../../api/src/model'
+import { LABELS, type Rules } from '@zhuifen/shared'
 
 // rules 由父组件持有，表单直接修改它；取消时由父组件恢复成房间当前的设置。
 defineProps<{ isHost: boolean; capacity: number; rules: Rules; busy: boolean; pending: boolean; connected: boolean; error: string }>()

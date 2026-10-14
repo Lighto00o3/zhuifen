@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DEFAULT_RULES, type PublicRoom } from '../../api/src/model'
+import { DEFAULT_RULES, type PublicRoom } from '@zhuifen/shared'
 import { formatElapsed } from '../app/utils/format'
 import { pointCards } from '../app/utils/pointCards'
 import { cacheOnlineGames, gameDelta, missingRounds, onlineGames, ONLINE_HISTORY_KEY } from '../app/utils/gameHistory'
