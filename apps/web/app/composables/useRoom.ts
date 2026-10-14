@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client'
 import type { PublicRoom, Session } from '@zhuifen/shared'
-import { createApi, errorCode, errorStatus } from '../utils/api'
+import { createApi, credentialGone, errorStatus } from '../utils/api'
 import { cacheOnlineGames } from '../utils/gameHistory'
 import { randomId } from '../utils/random'
 import { roomChanges } from '../utils/roomChanges'
@@ -66,7 +66,7 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
       try {
         const state = await api<PublicRoom>(`/rooms/${value.code}`, undefined, value.token)
         rememberRoomName(state.code, state.roomName)
-      } catch (e) { if (errorCode(e) === 'room_not_found') forgetSession(value.code) }
+      } catch (e) { if (credentialGone(e)) forgetSession(value.code) }
     }))
   }
   function saveSession(value: Session) {
@@ -105,7 +105,7 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
     try { const state = await api<PublicRoom>(`/rooms/${value.code}`); saveSession(value); receive(state); connect(); return true }
     catch (e) {
       session.value = null; error.value = (e as Error).message
-      if (errorCode(e) === 'room_not_found') forgetSession(value.code)
+      if (credentialGone(e)) forgetSession(value.code)
       return false
     }
   }

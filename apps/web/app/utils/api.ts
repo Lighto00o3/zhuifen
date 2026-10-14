@@ -6,6 +6,8 @@ function failure(message: string, status?: number, code?: string): ApiError {
 
 export function errorStatus(error: unknown) { return (error as ApiError | undefined)?.status }
 export function errorCode(error: unknown) { return (error as ApiError | undefined)?.code }
+// 房间已被清理，或凭证不属于这个房间（房间号被新房间重新使用）：这份凭证再也用不了，可以删掉。
+export function credentialGone(error: unknown) { return ['room_not_found', 'access_denied'].includes(errorCode(error) ?? '') }
 
 export function createApi(origin: string, request: typeof fetch = (...args) => fetch(...args)) {
   return async function api<T>(path: string, body?: unknown, token?: string): Promise<T> {

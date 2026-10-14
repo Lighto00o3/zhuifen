@@ -27,6 +27,26 @@ function uuid(value: unknown): string {
 }
 // 前端据此判断房间已被清理，与未知路由等其他 404 区分开。
 export const ROOM_NOT_FOUND = 'room_not_found';
+// 凭证不对（不是这个房间的成员），与「只有房主可以操作」等业务上的 403 区分开。
+export const ACCESS_DENIED = 'access_denied';
+// 每局记分和每个房间的局数设上限，防止房间状态无限增长；正常使用远远达不到。
+export const MAX_EVENTS_PER_ROUND = 2000;
+export const MAX_ROUNDS_PER_ROOM = 500;
+// 各命令允许的字段，其他字段一律拒绝，避免把无关数据写进命令记录。
+const COMMAND_FIELDS: Record<string, readonly string[]> = {
+  close: [], start: [], end: [], score: ['kind', 'recipientId'], undo: ['eventId'], restart: ['carry'],
+  configure: ['roomName', 'initialScore', 'rules', 'order'],
+};
+const COMMON_FIELDS = ['type', 'requestId', 'roundId'];
+function commandFields(data: Record<string, unknown>) {
+  const type = String(data.type);
+  if (!Object.hasOwn(COMMAND_FIELDS, type)) throw new BadRequestException('不支持的操作');
+  const allowed = COMMAND_FIELDS[type]!;
+  if (Object.keys(data).some(key => !COMMON_FIELDS.includes(key) && !allowed.includes(key))) throw new BadRequestException('请求格式不正确');
+  for (const key of ['roundId', 'recipientId', 'eventId']) {
+    if (data[key] !== undefined && (typeof data[key] !== 'string' || (data[key] as string).length > 64)) throw new BadRequestException('请求格式不正确');
+  }
+}
 const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 function playerCount(value: unknown): PlayerCount {
   if (value === undefined) return 3;
@@ -42,13 +62,14 @@ function member(nickname: unknown): { member: Member; token: string } {
   return { member: { id: randomUUID(), name: name(nickname), tokenHash: hash(token), score: 0 }, token };
 }
 export function authenticate(state: RoomState, token: unknown): Member {
-  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw new ForbiddenException('请重新加入房间');
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw new ForbiddenException({ message: '请重新加入房间', code: ACCESS_DENIED });
   const found = state.members.find(item => item.tokenHash === hash(token));
-  if (!found) throw new ForbiddenException('无权访问这个房间');
+  if (!found) throw new ForbiddenException({ message: '无权访问这个房间', code: ACCESS_DENIED });
   return found;
 }
 function settings(data: Record<string, unknown>): { rules: Rules; initialScore: number } {
   const input: Record<string, unknown> = data.rules === undefined ? DEFAULT_RULES : object(data.rules);
+  if (Object.keys(input).some(key => !Object.hasOwn(DEFAULT_RULES, key))) throw new BadRequestException('分值设置不正确');
   const rules = Object.fromEntries(Object.keys(DEFAULT_RULES).map(key => [key, integer(input[key], 1, 100)])) as Rules;
   return { rules, initialScore: integer(data.initialScore ?? 100, 1, 10000) };
 }
@@ -145,6 +166,7 @@ export class Rooms {
   async command(code: string, token: string | undefined, body: unknown) {
     this.validateCode(code);
     const data = object(body);
+    commandFields(data);
     const requestId = uuid(data.requestId);
     return this.transaction(code, async (state, client) => {
       const actor = authenticate(state, token);
@@ -181,6 +203,7 @@ export class Rooms {
         }
         case 'score': {
           if (state.status !== 'playing') throw new ConflictException('当前比赛不能记分');
+          if (state.events.length >= MAX_EVENTS_PER_ROUND) throw new ConflictException('这一局的记分次数已达上限，请结束本场后再开一局');
           if (typeof data.kind !== 'string' || !Object.hasOwn(DEFAULT_RULES, data.kind)) throw new BadRequestException('计分类型不正确');
           const kind = data.kind as ScoreKind;
           if (kind !== 'foul' && (typeof data.recipientId !== 'string' || data.recipientId === actor.id || !state.members.some(item => item.id === data.recipientId))) throw new BadRequestException('请选择其他球友收分');
@@ -201,6 +224,7 @@ export class Rooms {
         case 'restart': {
           hostOnly();
           if (state.status !== 'ended' || !state.startedAt || !state.endedAt) throw new ConflictException('请先结束本场，再开一局');
+          if ((state.roundCount ?? 0) >= MAX_ROUNDS_PER_ROOM) throw new ConflictException('这个房间的局数已达上限，请新开一个房间');
           if (data.carry !== true && data.carry !== false) throw new BadRequestException('请选择重置积分或接着上一场');
           await this.archiveRound(client, state, { id: state.roundId ?? state.startedAt, roomName: state.roomName,
             initialScore: state.initialScore, startingScores: state.startingScores, rules: { ...state.rules },

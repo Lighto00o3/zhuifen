@@ -28,14 +28,25 @@ export function warnIfClientIpUnconfigured() {
 export class RateLimiter {
   private hits = new Map<string, { count: number; resetAt: number }>();
   private sweptAt = Date.now();
-  check(key: string, limit: number, windowMs = 60_000) {
+  private entry(key: string, windowMs: number) {
     const now = Date.now();
     if (now - this.sweptAt > windowMs) {
       for (const [item, entry] of this.hits) if (entry.resetAt <= now) this.hits.delete(item);
       this.sweptAt = now;
     }
-    const entry = this.hits.get(key);
-    if (!entry || entry.resetAt <= now) { this.hits.set(key, { count: 1, resetAt: now + windowMs }); return; }
-    if (++entry.count > limit) throw new HttpException('操作太频繁，请稍后再试', HttpStatus.TOO_MANY_REQUESTS);
+    let entry = this.hits.get(key);
+    if (!entry || entry.resetAt <= now) { entry = { count: 0, resetAt: now + windowMs }; this.hits.set(key, entry); }
+    return entry;
   }
+  // 每次请求都计数，超过上限返回 429。
+  check(key: string, limit: number, windowMs = 60_000) {
+    if (++this.entry(key, windowMs).count > limit) throw tooMany();
+  }
+  // 只统计失败的请求：先用 guard 确认还没超限，请求失败后再用 record 记一次。
+  guard(key: string, limit: number) {
+    const entry = this.hits.get(key);
+    if (entry && entry.resetAt > Date.now() && entry.count >= limit) throw tooMany();
+  }
+  record(key: string, windowMs = 60_000) { this.entry(key, windowMs).count++; }
 }
+const tooMany = () => new HttpException('操作太频繁，请稍后再试', HttpStatus.TOO_MANY_REQUESTS);

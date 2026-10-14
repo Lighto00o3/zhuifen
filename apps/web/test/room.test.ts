@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DEFAULT_RULES, type PublicRoom, type ScoreEvent, type Session } from '@zhuifen/shared'
-import { createApi, errorCode, errorStatus } from '../app/utils/api'
+import { createApi, credentialGone, errorCode, errorStatus } from '../app/utils/api'
 import { roomChanges } from '../app/utils/roomChanges'
 import { addSession, forgetSessions, loadSessions, MAX_SESSIONS, pendingKey, SESSIONS_KEY } from '../app/utils/sessions'
 
@@ -35,9 +35,13 @@ test('api：网关返回 HTML 时给出可读的提示', async () => {
 
 test('api：业务错误保留状态码和错误码', async () => {
   const missing = createApi('', respond(404, '{"message":"房间不存在","code":"room_not_found"}'))
-  await assert.rejects(missing('/rooms/1'), (e: unknown) => (e as Error).message === '房间不存在' && errorStatus(e) === 404 && errorCode(e) === 'room_not_found')
+  await assert.rejects(missing('/rooms/1'), (e: unknown) => (e as Error).message === '房间不存在' && errorStatus(e) === 404 && errorCode(e) === 'room_not_found' && credentialGone(e))
   const invalid = createApi('', respond(400, '{"message":["昵称太长","房间号不对"]}'))
   await assert.rejects(invalid('/rooms'), (e: unknown) => (e as Error).message === '昵称太长；房间号不对')
+  const denied = createApi('', respond(403, '{"message":"无权访问这个房间","code":"access_denied"}'))
+  await assert.rejects(denied('/rooms/1'), (e: unknown) => credentialGone(e) && errorStatus(e) === 403)
+  const hostOnly = createApi('', respond(403, '{"message":"只有房主可以操作"}'))
+  await assert.rejects(hostOnly('/rooms/1'), (e: unknown) => !credentialGone(e))
   const empty = createApi('', respond(500, '{}'))
   await assert.rejects(empty('/rooms'), (e: unknown) => (e as Error).message === '操作失败' && errorStatus(e) === 500)
 })

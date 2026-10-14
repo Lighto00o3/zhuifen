@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { loadLocalGames } from '../utils/localGame'
 import { cacheOnlineGames, ONLINE_HISTORY_KEY, gameDelta, missingRounds, type HistoryGame } from '../utils/gameHistory'
-import { createApi, errorCode } from '../utils/api'
+import { createApi, credentialGone } from '../utils/api'
 import { forgetSessions, loadSessions } from '../utils/sessions'
 import type { PublicRoom, RoundRecord } from '@zhuifen/shared'
 useHead({ title: '历史对局 · 追分' })
@@ -35,8 +35,8 @@ onMounted(async () => {
         const rounds = missingRounds(localStorage, room) ? await api<RoundRecord[]>(`/rooms/${s.code}/rounds`, undefined, s.token) : []
         cacheOnlineGames(localStorage, room, rounds)
       } catch (e) {
-        // 房间已被服务端清理：缓存里的历史仍保留，只是不再尝试更新。
-        if (errorCode(e) === 'room_not_found') expired.add(s.code)
+        // 房间已被服务端清理（或凭证已失效）：缓存里的历史仍保留，只是不再尝试更新。
+        if (credentialGone(e)) expired.add(s.code)
         else failures++
       }
     }))

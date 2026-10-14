@@ -378,3 +378,73 @@ test('数据库空闲连接被断开时服务不退出，下一次请求重新�
     assert.notEqual((await app.get(Database).pool.query('SELECT pg_backend_pid() AS pid')).rows[0].pid, pid);
   } finally { await admin.end(); await app.close(); }
 });
+
+test('命令校验与限流：请求体上限、字段白名单、每局与每房间上限、试探房间号限流', { timeout: 60000 }, async () => {
+  process.env.CLIENT_IP_HEADER = 'x-test-client-ip';
+  const app = await createApp(); await app.listen(0, '127.0.0.1');
+  const origin = await app.getUrl(); let code: string | undefined;
+  const db = app.get(Database).pool;
+  async function send(path: string, body: unknown, ip: string, token?: string) {
+    const response = await fetch(`${origin}/api${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-test-client-ip': ip, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json() };
+  }
+  const cmd = (s: Session, data: Record<string, unknown>, ip = '198.51.100.1') => send(`/rooms/${s.code}/commands`, { requestId: randomUUID(), ...data }, ip, s.token);
+  try {
+    // 分值设置里多出来的键在创建房间和修改设置时都会被拒绝。
+    assert.equal((await send('/rooms', { name: '甲', rules: { ...DEFAULT_RULES, extra: 1 } }, '198.51.100.1')).status, 400);
+    const created = await send('/rooms', { name: '甲', playerCount: 2 }, '198.51.100.1');
+    const a: Session = created.body.session; code = a.code;
+    const b: Session = (await send(`/rooms/${code}/join`, { name: '乙', token: randomBytes(32).toString('hex'), requestId: randomUUID() }, '198.51.100.1')).body.session;
+    const order = [a.playerId, b.playerId];
+    assert.equal((await cmd(a, { type: 'configure', initialScore: 100, rules: { ...DEFAULT_RULES, extra: 1 }, order })).status, 400);
+    assert.equal((await cmd(a, { type: 'start' })).status, 201);
+
+    // 请求体超过 16 KB 直接拒绝；多余字段、属于其他命令的字段、过长的字段都不会写进命令记录。
+    const large = await cmd(b, { type: 'score', kind: 'foul', junk: randomBytes(10_000).toString('hex') });
+    assert.equal(large.status, 413); assert.equal(large.body.message, '请求内容过大');
+    for (const extra of [{ junk: 'x' }, { roomName: '名' }, { carry: true }, { recipientId: 'x'.repeat(65) }, { roundId: 1 }]) {
+      const response = await cmd(b, { type: 'score', kind: 'foul', ...extra });
+      assert.equal(response.status, 400, JSON.stringify(extra));
+    }
+    assert.equal((await cmd(b, { type: 'constructor' })).status, 400);
+    const stored = await db.query('SELECT max(octet_length(payload::text)) AS size, count(*)::int AS n FROM room_commands WHERE room_code=$1', [code]);
+    // 只有通过校验的 start 被记录，被拒绝的命令一条都没写进去。
+    assert.ok(stored.rows[0].size < 1024); assert.equal(stored.rows[0].n, 1);
+
+    // 同一 IP 每分钟最多 120 条命令，换一个 IP 不受影响。
+    for (let i = 0; i < 120; i++) assert.equal((await cmd(b, { type: 'score', kind: 'foul' }, '198.51.100.2')).status, 201);
+    const limited = await cmd(b, { type: 'score', kind: 'foul' }, '198.51.100.2');
+    assert.equal(limited.status, 429); assert.equal(limited.body.message, '操作太频繁，请稍后再试');
+    assert.equal((await cmd(b, { type: 'score', kind: 'foul' }, '198.51.100.3')).status, 201);
+
+    // 每局最多 2000 笔记分。
+    await db.query(`UPDATE rooms SET state=jsonb_set(state,'{events}',(SELECT jsonb_agg(jsonb_build_object('id', g::text, 'deltas', '{}'::jsonb)) FROM generate_series(1, 2000) g)) WHERE code=$1`, [code]);
+    const full = await cmd(b, { type: 'score', kind: 'foul' });
+    assert.equal(full.status, 409); assert.match(full.body.message, /记分次数已达上限/);
+    // 每个房间最多 500 局。
+    assert.equal((await cmd(a, { type: 'end' })).status, 201);
+    await db.query(`UPDATE rooms SET state=jsonb_set(state,'{roundCount}','500') WHERE code=$1`, [code]);
+    const tooMany = await cmd(a, { type: 'restart', carry: false });
+    assert.equal(tooMany.status, 409); assert.match(tooMany.body.message, /局数已达上限/);
+
+    // 业务上的 403（不是房主）不算试探。
+    for (let i = 0; i < 25; i++) assert.equal((await cmd(b, { type: 'restart', carry: false }, '198.51.100.4')).status, 403);
+    // 房间不存在、凭证不对：每个 IP 每分钟最多 20 次，超出后这个 IP 暂时不能查询任何房间。
+    for (let i = 0; i < 10; i++) assert.ok([403, 404].includes((await send(`/rooms/${String(100000 + i)}`, undefined, '198.51.100.5', 'c'.repeat(64))).status));
+    for (let i = 0; i < 10; i++) assert.equal((await send(`/rooms/${code}`, undefined, '198.51.100.5', 'c'.repeat(64))).status, 403);
+    const probing = await send(`/rooms/${code}`, undefined, '198.51.100.5', a.token);
+    assert.equal(probing.status, 429);
+    assert.equal((await send(`/rooms/${code}/rounds`, undefined, '198.51.100.5', a.token)).status, 429);
+    assert.equal((await send(`/rooms/${code}`, undefined, '198.51.100.6', a.token)).status, 200);
+    const denied = await send(`/rooms/${code}`, undefined, '198.51.100.7', 'c'.repeat(64));
+    assert.equal(denied.status, 403); assert.equal(denied.body.code, 'access_denied');
+  } finally {
+    delete process.env.CLIENT_IP_HEADER;
+    if (code) await db.query('DELETE FROM rooms WHERE code=$1', [code]);
+    await app.close();
+  }
+});
