@@ -9,6 +9,7 @@ const route = useRoute()
 const apiOrigin = useRuntimeConfig().public.apiOrigin.replace(/\/$/, '')
 // 历史页可能是服务休眠后第一个打开的页面，超时放宽到能等服务冷启动完。
 const api = createApi(apiOrigin, undefined, WAKE_TIMEOUT)
+const { slow: waking, track } = useSlowHint()
 const games = ref<HistoryGame[]>([])
 const mode = ref<'all' | 'local' | 'online'>('all')
 const day = ref('')
@@ -32,7 +33,7 @@ onMounted(async () => {
     const expired = new Set<string>()
     await Promise.allSettled(sessions.map(async s => {
       try {
-        const room = await api<PublicRoom>(`/rooms/${s.code}`, undefined, s.token)
+        const room = await track(() => api<PublicRoom>(`/rooms/${s.code}`, undefined, s.token))
         const rounds = missingRounds(localStorage, room) ? await api<RoundRecord[]>(`/rooms/${s.code}/rounds`, undefined, s.token) : []
         cacheOnlineGames(localStorage, room, rounds)
       } catch (e) {
@@ -63,7 +64,7 @@ onMounted(async () => {
       <template v-else>
         <div class="room-heading"><div><h1>每一桌，都记得。</h1><p>查看已结束的单机和联机对局。</p></div></div>
         <div class="history-filters"><div class="mode-picker"><button v-for="(label, value) in { all: '全部', local: '单机', online: '联机' }" :key="value" :class="{ active: mode === value }" :aria-pressed="mode === value" @click="mode = value">{{ label }}</button></div><label class="field">对局日期<input v-model="day" type="date" /></label><button v-if="day" class="text-button" @click="day = ''">清除日期</button></div>
-        <p v-if="loading" class="muted" role="status">正在更新联机历史…</p>
+        <p v-if="loading" class="muted" role="status">正在更新联机历史…{{ waking ? '服务正在启动，第一次可能需要半分钟左右。' : '' }}</p>
         <p v-if="!filtered.length" class="empty-history">{{ games.length ? '这个条件下没有对局，试试其他日期或模式。' : '结束一场追分后，比分和记录会出现在这里。' }}</p>
         <div class="history-games"><NuxtLink v-for="g in filtered" :key="g.id" class="history-game" :to="{ path: '/history', query: { id: g.id } }"><div class="history-game-heading"><b>{{ g.name || (g.members.length === 2 ? '双人追分' : '三人追分') }}</b><span>{{ g.mode === 'online' ? '联机' : '单机' }}</span></div><time>{{ date(g.startedAt) }}</time><div class="history-scores"><div v-for="p in g.members" :key="p.id"><span>{{ p.name }}</span><b>{{ p.score }}<small :class="gameDelta(g, p.id) >= 0 ? 'positive' : 'negative'">{{ gameDelta(g, p.id) > 0 ? '+' : '' }}{{ gameDelta(g, p.id) }}</small></b></div></div><span class="history-game-foot">{{ g.events.filter(e => !e.undoneAt).length }} 笔记分 <span>查看记录 →</span></span></NuxtLink></div>
         <p class="history-storage-note">单机记录保存在此浏览器。联机记录保存在房间中，此浏览器会缓存已查看的历史；请保留房间凭证。</p>

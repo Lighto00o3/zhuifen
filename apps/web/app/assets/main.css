@@ -121,6 +121,7 @@ summary::-webkit-details-marker { display: none; }
 .danger-button:hover:not(:disabled) { background: #913730; }
 .full { width: 100%; }
 .entry-foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 16px; }
+.wake-hint { text-align: center; margin-top: 12px; }
 .recent { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
 .recent > span { color: var(--muted); font-size: 13px; font-weight: 600; }
 .recent button { width: 100%; min-height: 60px; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; padding: 12px 0; background: transparent; border-bottom: 1px solid var(--line); }

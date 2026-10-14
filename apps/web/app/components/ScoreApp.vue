@@ -9,6 +9,7 @@ import type { ScoreNotice } from '../utils/roomChanges'
 import type { ConfirmAction } from './ConfirmDialog.vue'
 
 const route = useRoute()
+const { slow: waking, track } = useSlowHint()
 const transfers = ref<{ enqueue: (transfer: Transfer) => void } | null>(null)
 const notices = ref<{ push: (notice: ScoreNotice) => void } | null>(null)
 const {
@@ -63,12 +64,12 @@ async function enter() {
   busy.value = true; error.value = ''
   try {
     let result: { room: PublicRoom; session: Session }
-    if (tab.value === 'create') result = await api('/rooms', { name: nickname.value, roomName: roomName.value, playerCount: playerCount.value, initialScore: initialScore.value, rules }, { timeout: WAKE_TIMEOUT })
+    if (tab.value === 'create') result = await track(() => api('/rooms', { name: nickname.value, roomName: roomName.value, playerCount: playerCount.value, initialScore: initialScore.value, rules }, { timeout: WAKE_TIMEOUT }))
     else {
       if (!joining || joining.code !== roomCode.value || joining.name !== nickname.value.trim()) {
         joining = { code: roomCode.value, name: nickname.value.trim(), token: randomHex(32), requestId: randomId() }
       }
-      result = await api(`/rooms/${roomCode.value}/join`, joining, { timeout: WAKE_TIMEOUT })
+      result = await track(() => api(`/rooms/${roomCode.value}/join`, joining, { timeout: WAKE_TIMEOUT }))
     }
     enterRoom(result)
     await navigateTo({ path: '/room', query: { room: result.session.code } })
@@ -77,7 +78,7 @@ async function enter() {
 }
 async function resume(value: Session) {
   busy.value = true
-  try { if (await resumeRoom(value)) await navigateTo({ path: '/room', query: { room: value.code } }) }
+  try { if (await track(() => resumeRoom(value))) await navigateTo({ path: '/room', query: { room: value.code } }) }
   finally { busy.value = false }
 }
 async function give(kind: ScoreKind) {
@@ -130,6 +131,8 @@ async function confirmAction() {
   else if (action === 'undo' && lastEvent.value) await command({ type: 'undo', eventId: lastEvent.value.id })
 }
 onMounted(() => {
+  // 免费实例闲置后会休眠：一打开页面就先唤醒服务，填昵称的这段时间里它就在启动了。
+  void api('/health', undefined, { timeout: WAKE_TIMEOUT }).catch(() => {})
   loadSaved()
   const code = typeof route.query.room === 'string' ? route.query.room : undefined
   if (!code) void refreshRecent()
@@ -176,6 +179,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
           </template>
           <p v-if="error" class="error" role="alert">{{ error }}</p>
           <button class="primary full" :disabled="busy" type="submit">{{ busy ? '正在准备…' : tab === 'create' ? '创建房间，邀请球友' : '加入这一桌' }}</button>
+          <p v-if="waking" class="muted wake-hint" role="status">服务正在启动，第一次打开可能需要半分钟左右，请稍候。</p>
         </form>
         <p class="entry-foot">各自用手机，同步一场追分。</p><NuxtLink class="text-button full" to="/history">查看历史对局</NuxtLink>
         <div v-if="saved.length" class="recent"><span>最近的房间</span><button v-for="s in saved.slice(0, 3)" :key="s.code" :disabled="busy" @click="resume(s)"><span class="recent-room"><b v-if="s.roomName">{{ s.roomName }}</b><span class="recent-code"># {{ s.code }}</span></span><span>返回 →</span></button></div>
