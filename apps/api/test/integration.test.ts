@@ -292,10 +292,15 @@ test('同桌重开：权限、继承与重置、历史快照、重试去重以�
     await cmd(a, { type: 'restart', carry: 'yes' }, 400);
     const restartId = randomUUID();
     const next = await cmd(a, { type: 'restart', carry: true, requestId: restartId });
-    assert.equal(next.rounds.length, 1); assert.equal(next.events.length, 0);
+    assert.equal(next.roundCount, 1); assert.equal(next.events.length, 0);
+    assert.equal('rounds' in next, false);
     assert.deepEqual(next.members.map((p: any) => p.score), [104, 96]);
     assert.deepEqual(next.startingScores, { [a.playerId]: 104, [b.playerId]: 96 });
-    assert.deepEqual(next.rounds[0].events, ended.events);
+    const archived = await req(`/rooms/${code}/rounds`, undefined, b, 200);
+    assert.equal(archived.length, 1);
+    assert.deepEqual(archived[0].events, ended.events);
+    assert.deepEqual(archived[0].members.map((p: any) => p.score), [104, 96]);
+    await req(`/rooms/${code}/rounds`, undefined, undefined, 403);
     assert.equal(JSON.stringify(next).includes('tokenHash'), false);
     assert.equal((await cmd(a, { type: 'restart', carry: true, requestId: restartId })).version, next.version);
     await cmd(b, { type: 'score', kind: 'foul' }, 409);
@@ -305,12 +310,23 @@ test('同桌重开：权限、继承与重置、历史快照、重试去重以�
     await cmd(a, { type: 'end', roundId: restartId });
     await cmd(a, { type: 'restart', carry: false }, 409);
     const reset = await cmd(a, { type: 'restart', carry: false, roundId: restartId });
-    assert.equal(reset.rounds.length, 2);
+    assert.equal(reset.roundCount, 2);
     assert.deepEqual(reset.members.map((p: any) => p.score), [100, 100]);
-    assert.deepEqual(reset.rounds[0].events, ended.events);
+    const rounds = await req(`/rooms/${code}/rounds`, undefined, a, 200);
+    assert.deepEqual(rounds.map((r: any) => r.id), [ended.startedAt, restartId]);
+    assert.deepEqual(rounds[0].events, ended.events);
     await cmd(b, { type: 'score', kind: 'foul', roundId: restartId }, 409);
     const restored = await req(`/rooms/${code}`, undefined, b, 200);
-    assert.equal(restored.rounds.length, 2); assert.deepEqual(restored.members.map((p: any) => p.score), [100, 100]);
+    assert.equal(restored.roundCount, 2); assert.deepEqual(restored.members.map((p: any) => p.score), [100, 100]);
+    // 部署期间旧实例仍可能把历史局写进状态的 rounds 数组，新代码读取时会搬到 room_rounds 表。
+    const legacy = { ...rounds[1], id: 'legacy-round' };
+    await app.get(Database).pool.query("UPDATE rooms SET state=jsonb_set(state,'{rounds}',$2::jsonb) WHERE code=$1", [code, JSON.stringify([legacy])]);
+    const absorbed = await req(`/rooms/${code}`, undefined, a, 200);
+    assert.equal(absorbed.roundCount, 3); assert.equal('rounds' in absorbed, false);
+    assert.ok(absorbed.version > restored.version);
+    assert.deepEqual((await req(`/rooms/${code}/rounds`, undefined, a, 200)).map((r: any) => r.id), [ended.startedAt, restartId, 'legacy-round']);
+    const raw = await app.get(Database).pool.query("SELECT state ? 'rounds' AS has FROM rooms WHERE code=$1", [code]);
+    assert.equal(raw.rows[0].has, false);
   } finally { if (code) await app.get(Database).pool.query('DELETE FROM rooms WHERE code=$1', [code]); await app.close(); }
 });
 

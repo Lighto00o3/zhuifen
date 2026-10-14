@@ -125,8 +125,9 @@ npm run build
 | `GET /api/health` | 数据库健康检查 |
 | `POST /api/rooms` | 创建房间：`name, playerCount, initialScore, rules`；playerCount 为 2 或 3，省略时兼容默认 3 |
 | `POST /api/rooms/:code/join` | 加入：`name, token, requestId`，token 为客户端生成的 32 字节随机十六进制串 |
-| `GET /api/rooms/:code` | 成员读取完整公开状态 |
-| `POST /api/rooms/:code/commands` | 执行 `close / start / configure / score / undo / end`，带 `requestId` |
+| `GET /api/rooms/:code` | 成员读取当前这一局的公开状态；`roundCount` 为已结束并归档的局数 |
+| `GET /api/rooms/:code/rounds` | 成员按顺序读取已归档的历史局 |
+| `POST /api/rooms/:code/commands` | 执行 `close / start / configure / score / undo / end / restart`，带 `requestId` |
 
 成员请求通过 `Authorization: Bearer <token>` 鉴权。计分命令只有 `kind`，操作人从 token 推导，不能通过提交别人的 ID 代记分。
 

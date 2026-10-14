@@ -23,6 +23,9 @@ export class RoomController {
     authenticate(state, authorization?.replace(/^Bearer /, ''));
     return this.realtime.publicState(state);
   }
+  @Get('rooms/:code/rounds') async rounds(@Param('code') code: string, @Headers('authorization') authorization?: string) {
+    return this.rooms.rounds(code, authorization?.replace(/^Bearer /, ''));
+  }
   @Post('rooms/:code/commands') async command(@Param('code') code: string, @Body() body: unknown, @Headers('authorization') authorization?: string) {
     return this.realtime.publish(await this.rooms.command(code, authorization?.replace(/^Bearer /, ''), body));
   }

@@ -16,9 +16,11 @@ export interface RoundRecord {
 export interface RoomState {
   code: string; roomName?: string; hostId: string; status: 'waiting' | 'playing' | 'ended' | 'closed';
   version: number; playerCount: PlayerCount; initialScore: number; rules: Rules; members: Member[];
-  events: ScoreEvent[]; rounds?: RoundRecord[]; roundId?: string; startingScores?: Record<string, number>; createdAt: string; startedAt?: string; endedAt?: string; closedAt?: string;
+  events: ScoreEvent[];
+  // 已结束并归档到 room_rounds 表的局数；rounds 只出现在迁移前或旧版本代码写入的数据里。
+  roundCount?: number; rounds?: RoundRecord[]; roundId?: string; startingScores?: Record<string, number>; createdAt: string; startedAt?: string; endedAt?: string; closedAt?: string;
 }
-export interface PublicRoom extends Omit<RoomState, 'members'> {
+export interface PublicRoom extends Omit<RoomState, 'members' | 'rounds'> {
   members: (Player & { online: boolean })[];
 }
 export interface Session { code: string; playerId: string; token: string; roomName?: string }

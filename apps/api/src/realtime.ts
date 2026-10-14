@@ -12,7 +12,8 @@ export class Realtime {
   constructor(@Inject(Rooms) private readonly rooms: Rooms) {}
   publicState(state: RoomState): PublicRoom {
     const online = new Set(this.presence.get(state.code)?.values());
-    return { ...state, members: state.members.map(({ tokenHash: _, ...player }) => ({ ...player, online: online.has(player.id) })) };
+    const { rounds: _, ...current } = state;
+    return { ...current, members: state.members.map(({ tokenHash: _, ...player }) => ({ ...player, online: online.has(player.id) })) };
   }
   publish(state: RoomState) {
     const result = this.publicState(state);

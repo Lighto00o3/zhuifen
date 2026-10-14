@@ -1,7 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { Database } from './database';
-import { DEFAULT_RULES, LABELS, Member, PlayerCount, RoomState, Rules, ScoreKind, scoreDeltas } from './model';
+import type { PoolClient } from 'pg';
+import { DEFAULT_RULES, LABELS, Member, PlayerCount, RoomState, RoundRecord, Rules, ScoreKind, scoreDeltas } from './model';
 
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new BadRequestException('请求格式不正确');
@@ -62,7 +63,29 @@ export class Rooms {
     this.validateCode(code);
     const result = await this.db.pool.query('SELECT state FROM rooms WHERE code=$1', [code]);
     if (!result.rows[0]) throw new NotFoundException({ message: '房间不存在，请检查房间号', code: ROOM_NOT_FOUND });
-    return restoreState(result.rows[0].state);
+    const state = restoreState(result.rows[0].state);
+    // 状态里还带着历史局（旧版本代码在迁移后写入的），先搬到 room_rounds 表再返回。
+    return state.rounds ? this.transaction(code, async () => false) : state;
+  }
+  // 已结束的局按顺序返回，用于历史页补齐本机缺少的对局。
+  async rounds(code: string, token: unknown): Promise<RoundRecord[]> {
+    authenticate(await this.read(code), token);
+    const result = await this.db.pool.query('SELECT record FROM room_rounds WHERE room_code=$1 ORDER BY seq', [code]);
+    return result.rows.map(row => row.record);
+  }
+  private async archiveRound(client: PoolClient, state: RoomState, round: RoundRecord) {
+    const seq = (state.roundCount ?? 0) + 1;
+    await client.query('INSERT INTO room_rounds(room_code,round_id,seq,record) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [state.code, round.id, seq, round]);
+    state.roundCount = seq;
+  }
+  // 部署新版本时旧实例可能还在运行，它会把历史局继续写进状态的 rounds 数组。
+  private async absorbLegacyRounds(client: PoolClient, state: RoomState) {
+    if (!state.rounds) return false;
+    for (const round of state.rounds) await this.archiveRound(client, state, round);
+    delete state.rounds;
+    const count = await client.query('SELECT count(*)::int AS n FROM room_rounds WHERE room_code=$1', [state.code]);
+    state.roundCount = count.rows[0].n;
+    return true;
   }
   async create(body: unknown) {
     const data = object(body);
@@ -102,14 +125,15 @@ export class Rooms {
     });
     return { state, session: { code, playerId: newcomer.member.id, token: newcomer.token }, requestId };
   }
-  private async transaction(code: string, update: (state: RoomState, client: import('pg').PoolClient) => Promise<boolean>): Promise<RoomState> {
+  private async transaction(code: string, update: (state: RoomState, client: PoolClient) => Promise<boolean>): Promise<RoomState> {
     const client = await this.db.pool.connect();
     try {
       await client.query('BEGIN');
       const result = await client.query('SELECT state FROM rooms WHERE code=$1 FOR UPDATE', [code]);
       if (!result.rows[0]) throw new NotFoundException({ message: '房间不存在', code: ROOM_NOT_FOUND });
       const state = restoreState(result.rows[0].state);
-      if (await update(state, client)) {
+      const absorbed = await this.absorbLegacyRounds(client, state);
+      if (await update(state, client) || absorbed) {
         state.version++;
         await client.query('UPDATE rooms SET state=$2,updated_at=now() WHERE code=$1', [code, state]);
       }
@@ -178,10 +202,10 @@ export class Rooms {
           hostOnly();
           if (state.status !== 'ended' || !state.startedAt || !state.endedAt) throw new ConflictException('请先结束本场，再开一局');
           if (data.carry !== true && data.carry !== false) throw new BadRequestException('请选择重置积分或接着上一场');
-          state.rounds = [...(state.rounds ?? []), { id: state.roundId ?? state.startedAt, roomName: state.roomName,
+          await this.archiveRound(client, state, { id: state.roundId ?? state.startedAt, roomName: state.roomName,
             initialScore: state.initialScore, startingScores: state.startingScores, rules: { ...state.rules },
             members: state.members.map(({ id, name, score }) => ({ id, name, score })),
-            events: state.events, startedAt: state.startedAt, endedAt: state.endedAt }];
+            events: state.events, startedAt: state.startedAt, endedAt: state.endedAt });
           if (!data.carry) state.members.forEach(item => { item.score = state.initialScore; });
           state.startingScores = Object.fromEntries(state.members.map(item => [item.id, item.score]));
           state.roundId = requestId; state.events = []; state.status = 'playing';

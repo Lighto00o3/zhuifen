@@ -43,7 +43,7 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
     if (room.value && state.version <= room.value.version) return
     const before = room.value
     // 历史只在有局结束时变化，记分过程中不必反复重写整份缓存。
-    if (!before || before.code !== state.code || before.status !== state.status || before.rounds?.length !== state.rounds?.length) {
+    if (!before || before.code !== state.code || before.status !== state.status || before.roundCount !== state.roundCount) {
       try { cacheOnlineGames(localStorage, state) } catch {}
     }
     // HTTP 响应、广播和重连快照按版本去重，同一笔记分只提示一次。

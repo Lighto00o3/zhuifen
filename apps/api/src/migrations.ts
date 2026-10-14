@@ -27,6 +27,28 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS rooms_updated_at ON rooms(updated_at);
     `,
   },
+  {
+    version: 2,
+    name: '历史局拆到 room_rounds 表',
+    // 已结束的局从房间状态的 rounds 数组搬到单独的表，房间状态只保留当前这一局。
+    sql: `
+      CREATE TABLE room_rounds (
+        room_code TEXT NOT NULL REFERENCES rooms(code) ON DELETE CASCADE,
+        round_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        record JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (room_code, round_id)
+      );
+      CREATE INDEX room_rounds_seq ON room_rounds(room_code, seq);
+      INSERT INTO room_rounds (room_code, round_id, seq, record)
+        SELECT rooms.code, r.value->>'id', r.ordinality, r.value
+        FROM rooms, jsonb_array_elements(CASE WHEN jsonb_typeof(rooms.state->'rounds') = 'array' THEN rooms.state->'rounds' ELSE '[]'::jsonb END) WITH ORDINALITY AS r(value, ordinality)
+        ON CONFLICT DO NOTHING;
+      UPDATE rooms SET state = (state - 'rounds') || jsonb_build_object('roundCount', (SELECT count(*) FROM room_rounds WHERE room_code = rooms.code))
+        WHERE jsonb_typeof(state->'rounds') = 'array';
+    `,
+  },
 ];
 
 // 任意固定的数字，用来保证同一时间只有一个进程在执行迁移。
