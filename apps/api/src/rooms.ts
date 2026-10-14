@@ -130,7 +130,7 @@ export class Rooms {
         return false;
       }
       const hostOnly = () => { if (actor.id !== state.hostId) throw new ForbiddenException('只有房主可以操作'); };
-      if (['score', 'undo', 'end'].includes(String(data.type)) && state.roundId && data.roundId !== state.roundId) throw new ConflictException('已进入新一局，请查看最新比分后再操作');
+      if (['score', 'undo', 'end', 'restart'].includes(String(data.type)) && state.roundId && data.roundId !== state.roundId) throw new ConflictException('已进入新一局，请查看最新比分后再操作');
       switch (data.type) {
         case 'close':
           hostOnly();

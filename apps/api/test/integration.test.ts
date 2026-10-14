@@ -303,7 +303,8 @@ test('同桌重开：权限、继承与重置、历史快照、重试去重以�
     const score = await cmd(b, { type: 'score', kind: 'foul', roundId: restartId });
     assert.deepEqual(score.members.map((p: any) => p.score), [105, 95]);
     await cmd(a, { type: 'end', roundId: restartId });
-    const reset = await cmd(a, { type: 'restart', carry: false });
+    await cmd(a, { type: 'restart', carry: false }, 409);
+    const reset = await cmd(a, { type: 'restart', carry: false, roundId: restartId });
     assert.equal(reset.rounds.length, 2);
     assert.deepEqual(reset.members.map((p: any) => p.score), [100, 100]);
     assert.deepEqual(reset.rounds[0].events, ended.events);
