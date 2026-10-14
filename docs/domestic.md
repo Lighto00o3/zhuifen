@@ -35,12 +35,14 @@ POSTGRES_PASSWORD=随机生成的十六进制密码
 
 | 类型 | 名称 | 内容 |
 | --- | --- | --- |
-| Variable | `DEPLOY_HOST` | 服务器公网 IPv4 或主机名 |
-| Variable | `DEPLOY_USER` | 有 Docker 和部署目录权限的 SSH 用户 |
-| Variable | `DEPLOY_PATH` | `/opt/zhuifen`，也可留空使用默认值 |
+| Secret | `DEPLOY_HOST` | 服务器公网 IPv4 或主机名 |
+| Secret | `DEPLOY_USER` | 有 Docker 和部署目录权限的 SSH 用户 |
+| Secret | `DEPLOY_PATH` | `/opt/zhuifen`，也可留空使用默认值 |
 | Secret | `DEPLOY_SSH_KEY` | 单独用于部署的 SSH 私钥 |
 | Secret | `DEPLOY_SSH_KNOWN_HOSTS` | 核对过服务器指纹的 known_hosts 条目 |
 | Variable | `DEPLOY_ENABLED` | 准备完成后设置 `true` 开启部署 |
+
+仓库是公开的，Actions 日志任何人都能查看。服务器地址、用户名和路径都要用 Secret 配置：Secret 会在日志里显示为 `***`，Variable 会原样显示。
 
 SSH 密钥不要发在聊天中。可以在本机生成独立部署密钥，再由代理通过 `gh secret set` 写入 GitHub；首次指纹应与云控制台或可信通道核对。开启前，CI 仍会构建两份生产镜像，但不会连接任何服务器。
 
