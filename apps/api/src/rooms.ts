@@ -122,11 +122,10 @@ export class Rooms {
     const requestId = uuid(data.requestId);
     return this.transaction(code, async (state, client) => {
       const actor = authenticate(state, token);
-      const prior = await client.query('SELECT actor_id,payload FROM room_commands WHERE room_code=$1 AND request_id=$2', [code, requestId]);
+      const prior = await client.query('SELECT actor_id,payload=$3::jsonb AS same FROM room_commands WHERE room_code=$1 AND request_id=$2', [code, requestId, data]);
       if (prior.rows[0]) {
         // 同一编号只能重试原来的操作，不能伪装成另一条命令。
-        const equivalent = await client.query('SELECT payload=$1::jsonb AS same FROM room_commands WHERE room_code=$2 AND request_id=$3', [data, code, requestId]);
-        if (prior.rows[0].actor_id !== actor.id || !equivalent.rows[0].same) throw new ConflictException('操作编号已被使用');
+        if (prior.rows[0].actor_id !== actor.id || !prior.rows[0].same) throw new ConflictException('操作编号已被使用');
         return false;
       }
       const hostOnly = () => { if (actor.id !== state.hostId) throw new ForbiddenException('只有房主可以操作'); };

@@ -1,10 +1,11 @@
 import { Inject } from '@nestjs/common';
 import { ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { corsOrigins } from './env';
 import { PublicRoom, RoomState } from './model';
 import { authenticate, object, Rooms } from './rooms';
 
-@WebSocketGateway({ cors: { origin: (process.env.CORS_ORIGINS ?? 'http://localhost:3000,http://127.0.0.1:3000').split(',') }, maxHttpBufferSize: 4096 })
+@WebSocketGateway({ cors: { origin: corsOrigins }, maxHttpBufferSize: 4096 })
 export class Realtime {
   @WebSocketServer() server!: Server;
   private presence = new Map<string, Map<string, string>>();

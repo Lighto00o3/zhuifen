@@ -116,8 +116,11 @@ async function api<T>(path: string, body?: unknown, token = session.value?.token
 function receive(state: PublicRoom) {
   if (session.value && state.code !== session.value.code) return
   if (room.value && state.version <= room.value.version) return
-  try { cacheOnlineGames(localStorage, state) } catch {}
   const before = room.value
+  // 历史只在有局结束时变化，记分过程中不必反复重写整份缓存。
+  if (!before || before.code !== state.code || before.status !== state.status || before.rounds?.length !== state.rounds?.length) {
+    try { cacheOnlineGames(localStorage, state) } catch {}
+  }
   const playerId = session.value?.playerId
   // 首次进入只恢复比分；HTTP 响应、广播和重连快照按版本去重。
   if (before && before.code === state.code && before.roundId === state.roundId && playerId) {

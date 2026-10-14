@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import './env';
+import { corsOrigins } from './env';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { Database } from './database';
@@ -12,7 +12,7 @@ class AppModule {}
 
 export async function createApp() {
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log'] });
-  app.enableCors({ origin: (process.env.CORS_ORIGINS ?? 'http://localhost:3000,http://127.0.0.1:3000').split(',') });
+  app.enableCors({ origin: corsOrigins });
   app.enableShutdownHooks();
   return app;
 }
