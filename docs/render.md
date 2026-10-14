@@ -10,18 +10,16 @@
 
 - 前端：https://zhuifen-web-lighto00o3.onrender.com
 - API：https://zhuifen-api-lighto00o3.onrender.com/api/health
-- Render 前端控制台：https://dashboard.render.com/static/srv-db5s7s2jnfac73biec6g
-- Render 后端控制台：https://dashboard.render.com/web/srv-db5s8l0473hc73c7vnv0
-- Neon 控制台：https://console.neon.tech/app/projects/rough-moon-14079461
+- 控制台：登录 [Render](https://dashboard.render.com/) 后在服务列表中找到 `zhuifen-web-lighto00o3`（前端）和 `zhuifen-api-lighto00o3`（后端）；数据库在 [Neon](https://console.neon.tech/) 的项目列表中。
 
-后端与数据库均在新加坡，API 是 Render Free，数据库为 Neon Free。运行时使用 `production` 分支中的 `zhuifen_app` 数据库和专用账号；数据库密码仅配置在 Render。请用这些现有服务管理部署，不要再次创建同名 Blueprint，以免产生重复服务。
+后端与数据库均在新加坡，API 是 Render Free，数据库为 Neon Free。后端使用专用的数据库账号，连接信息仅配置在 Render 的环境变量中。请用这些现有服务管理部署，不要再次创建同名 Blueprint，以免产生重复服务。
 
 ## 首次上线
 
 1. 登录 Render 并授权访问这个 GitHub 仓库，登录 Neon 创建免费 PostgreSQL 项目，尽量选择与后端接近的区域。
 2. 在 Render 创建 Blueprint，选择仓库的 `main`，使用根目录 `render.yaml`。检查 API 的套餐是 `free`。
 3. 给 API 配置 `DATABASE_URL`：使用 Neon 提供的 PostgreSQL 连接字符串，保留其 TLS 参数，例如 `sslmode=require`。凭证只存 Render 的环境变量，不写入源码。
-4. 给 API 配置 `CORS_ORIGINS`：实际前端 HTTPS 地址。给前端配置 `NUXT_PUBLIC_API_ORIGIN`：实际 API HTTPS 地址，不带 `/api` 后缀。
+4. 给 API 配置 `CORS_ORIGINS`：实际前端 HTTPS 地址；配置 `CLIENT_IP_HEADER=true-client-ip`，限流才能识别每个用户的真实 IP（服务不是从 Blueprint 创建时，`render.yaml` 里的变量不会自动生效，需要手动添加）。给前端配置 `NUXT_PUBLIC_API_ORIGIN`：实际 API HTTPS 地址，不带 `/api` 后缀。
 5. 检查实际生成的域名；服务名称冲突时平台可能分配不同地址，应使用控制台显示的地址。上述域名调整后重新部署。
 6. 检查 `/api/health`，再用三个独立浏览器会话及三部手机流量验收：创建、加入、开局、犯规、撤销、刷新和重连。
 
