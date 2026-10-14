@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { loadLocalGames } from '../utils/localGame'
 import { cacheOnlineGames, ONLINE_HISTORY_KEY, gameDelta, missingRounds, type HistoryGame } from '../utils/gameHistory'
-import { createApi, credentialGone } from '../utils/api'
+import { createApi, credentialGone, WAKE_TIMEOUT } from '../utils/api'
 import { forgetSessions, loadSessions } from '../utils/sessions'
 import type { PublicRoom, RoundRecord } from '@zhuifen/shared'
 useHead({ title: '历史对局 · 追分' })
 const route = useRoute()
 const apiOrigin = useRuntimeConfig().public.apiOrigin.replace(/\/$/, '')
-const api = createApi(apiOrigin, (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(12000) }))
+// 历史页可能是服务休眠后第一个打开的页面，超时放宽到能等服务冷启动完。
+const api = createApi(apiOrigin, undefined, WAKE_TIMEOUT)
 const games = ref<HistoryGame[]>([])
 const mode = ref<'all' | 'local' | 'online'>('all')
 const day = ref('')

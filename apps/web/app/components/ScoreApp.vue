@@ -2,6 +2,7 @@
 import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { clockTime, formatElapsed } from '../utils/format'
 import { randomHex, randomId } from '../utils/random'
+import { WAKE_TIMEOUT } from '../utils/api'
 import { DEFAULT_RULES, LABELS, type PlayerCount, type PublicRoom, type Rules, type ScoreKind, type Session } from '@zhuifen/shared'
 import type { Transfer } from './CardTransfer.vue'
 import type { ScoreNotice } from '../utils/roomChanges'
@@ -62,12 +63,12 @@ async function enter() {
   busy.value = true; error.value = ''
   try {
     let result: { room: PublicRoom; session: Session }
-    if (tab.value === 'create') result = await api('/rooms', { name: nickname.value, roomName: roomName.value, playerCount: playerCount.value, initialScore: initialScore.value, rules })
+    if (tab.value === 'create') result = await api('/rooms', { name: nickname.value, roomName: roomName.value, playerCount: playerCount.value, initialScore: initialScore.value, rules }, { timeout: WAKE_TIMEOUT })
     else {
       if (!joining || joining.code !== roomCode.value || joining.name !== nickname.value.trim()) {
         joining = { code: roomCode.value, name: nickname.value.trim(), token: randomHex(32), requestId: randomId() }
       }
-      result = await api(`/rooms/${roomCode.value}/join`, joining)
+      result = await api(`/rooms/${roomCode.value}/join`, joining, { timeout: WAKE_TIMEOUT })
     }
     enterRoom(result)
     await navigateTo({ path: '/room', query: { room: result.session.code } })

@@ -6,6 +6,7 @@ import { io, Socket } from 'socket.io-client';
 import { Pool } from 'pg';
 import { createApp } from '../src/main';
 import { Database } from '../src/database';
+import { Rooms } from '../src/rooms';
 import type { PublicRoom, Session } from '@zhuifen/shared';
 import { DEFAULT_RULES } from '@zhuifen/shared';
 
@@ -445,6 +446,39 @@ test('命令校验与限流：请求体上限、字段白名单、每局与每�
   } finally {
     delete process.env.CLIENT_IP_HEADER;
     if (code) await db.query('DELETE FROM rooms WHERE code=$1', [code]);
+    await app.close();
+  }
+});
+
+test('实时订阅失败：凭证无效时返回 denied（不再重试），数据库暂时出错时返回 unavailable（客户端稍后重试）', { timeout: 30000 }, async () => {
+  const app = await createApp(); await app.listen(0, '127.0.0.1');
+  const origin = await app.getUrl(); let code: string | undefined;
+  const socket = io(origin, { transports: ['websocket'], forceNew: true });
+  const subscribe = (body: unknown) => new Promise<{ ok: boolean; code?: string; message?: string; room?: PublicRoom }>((resolve, reject) =>
+    socket.timeout(5000).emit('room:subscribe', body, (error: Error | null, result: { ok: boolean; code?: string }) => error ? reject(error) : resolve(result)));
+  try {
+    await new Promise<void>((resolve, reject) => { socket.once('connect', () => resolve()); socket.once('connect_error', reject); });
+    const created = await (await fetch(`${origin}/api/rooms`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '甲' }) })).json();
+    const session: Session = created.session; code = session.code;
+    // 房间不存在和凭证不对返回同样的结果，不能用来试探房间号。
+    const wrongToken = await subscribe({ ...session, token: 'd'.repeat(64) });
+    const missing = await subscribe({ ...session, code: code === '999999' ? '999998' : '999999' });
+    for (const result of [wrongToken, missing, await subscribe({ code: 123 }), await subscribe('bad')]) {
+      assert.equal(result.ok, false); assert.equal(result.code, 'denied');
+    }
+    assert.deepEqual(wrongToken, missing);
+    // 数据库暂时不可用。
+    const rooms = app.get(Rooms);
+    const read = rooms.read.bind(rooms);
+    rooms.read = async () => { throw new Error('connection terminated unexpectedly'); };
+    const unavailable = await subscribe(session);
+    assert.equal(unavailable.ok, false); assert.equal(unavailable.code, 'unavailable');
+    rooms.read = read;
+    const recovered = await subscribe(session);
+    assert.equal(recovered.ok, true); assert.equal(recovered.room?.code, code);
+  } finally {
+    socket.disconnect();
+    if (code) await app.get(Database).pool.query('DELETE FROM rooms WHERE code=$1', [code]);
     await app.close();
   }
 });

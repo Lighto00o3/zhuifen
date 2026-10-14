@@ -27,7 +27,7 @@ export class Realtime {
   async subscribe(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown) {
     try {
       const data = object(body);
-      if (typeof data.code !== 'string') return { ok: false, message: '房间号不正确' };
+      if (typeof data.code !== 'string') return { ok: false, code: 'denied', message: '房间号不正确' };
       const state = await this.rooms.read(data.code);
       const actor = authenticate(state, data.token);
       if (socket.data.code && socket.data.code !== state.code) {
@@ -41,7 +41,13 @@ export class Realtime {
       this.publishPresence(state.code);
       // 先订阅，再读取，避免读取和加入房间之间漏掉更新。
       return { ok: true, room: this.publicState(await this.rooms.read(state.code)) };
-    } catch { return { ok: false, message: '无法连接房间，请检查加入凭证' }; }
+    } catch (error) {
+      // 4xx（凭证无效、房间不存在、格式不对）时客户端不再重试；数据库暂时不可用等其他错误，客户端会稍后自动重试。
+      // 两种 4xx 返回同样的结果，不能用来试探哪些房间号存在。
+      const status = (error as { getStatus?: () => number } | null)?.getStatus?.();
+      if (status !== undefined && status < 500) return { ok: false, code: 'denied', message: '无法连接房间，请检查加入凭证' };
+      return { ok: false, code: 'unavailable', message: '暂时无法连接房间，正在重试' };
+    }
   }
   private removePresence(socket: Socket) {
     const code: string | undefined = socket.data.code;

@@ -4,6 +4,8 @@ import { DEFAULT_RULES, type PublicRoom, type ScoreEvent, type Session } from '@
 import { createApi, credentialGone, errorCode, errorStatus } from '../app/utils/api'
 import { roomChanges } from '../app/utils/roomChanges'
 import { addSession, forgetSessions, loadSessions, MAX_SESSIONS, pendingKey, SESSIONS_KEY } from '../app/utils/sessions'
+import { withStorage } from '../app/utils/storage'
+import { createSubscription, MAX_RETRY_DELAY, type SubscribeResponse } from '../app/utils/subscription'
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial))
@@ -127,4 +129,69 @@ test('sessions：删除过期房间的凭证和未完成的操作', () => {
   assert.deepEqual(JSON.parse(storage.data.get(SESSIONS_KEY)!), [session('222222')])
   assert.equal(storage.data.has(pendingKey('111111')), false)
   assert.equal(storage.data.has(pendingKey('222222')), true)
+})
+
+test('api：超时和断网时给出中文提示，并且没有状态码（可以重试）', async () => {
+  const hang = createApi('', (_url, init) => new Promise((_resolve, reject) => init!.signal!.addEventListener('abort', () => reject(new DOMException('signal is aborted without reason', 'AbortError')))), 30)
+  await assert.rejects(hang('/rooms'), (e: unknown) => (e as Error).message === '网络超时，请稍后重试' && errorStatus(e) === undefined)
+  // 单次请求可以放宽超时：60 毫秒后才返回的请求在 100 毫秒的限制内能成功。
+  const slow = createApi('', () => new Promise(resolve => setTimeout(() => resolve(new Response('{"ok":true}')), 60)), 30)
+  await assert.rejects(slow('/rooms'), /网络超时/)
+  assert.deepEqual(await slow('/rooms', undefined, undefined, 100), { ok: true })
+  const offline = createApi('', async () => { throw new TypeError('Failed to fetch') })
+  await assert.rejects(offline('/rooms'), (e: unknown) => (e as Error).message === '网络连接失败，请检查网络后重试' && errorStatus(e) === undefined)
+})
+
+test('subscription：订阅失败按退避间隔重试，成功后重置；凭证无效时不再重试', () => {
+  const timers: { run: () => void; delay: number }[] = []
+  const answers: (SubscribeResponse | 'timeout')[] = []
+  const rooms: string[] = []
+  const denied: string[] = []
+  let active = true
+  const subscription = createSubscription({
+    emit: done => { const answer = answers.shift()!; answer === 'timeout' ? done(new Error('operation has timed out')) : done(null, answer) },
+    active: () => active,
+    onRoom: room => rooms.push(room.code),
+    onDenied: message => denied.push(message),
+    schedule: (run, delay) => { timers.push({ run, delay }); return timers.length },
+    cancel: () => {},
+  })
+  const room = { code: '123456' } as PublicRoom
+  answers.push('timeout', { ok: false, code: 'unavailable' }, 'timeout', { ok: true, room })
+  subscription.start()
+  for (let i = 0; i < 3; i++) timers.at(-1)!.run()
+  assert.deepEqual(timers.map(t => t.delay), [1000, 2000, 4000])
+  assert.deepEqual(rooms, ['123456'])
+  // 退避间隔最多 15 秒。
+  answers.push(...Array(8).fill('timeout'))
+  subscription.start()
+  for (let i = 0; i < 7; i++) timers.at(-1)!.run()
+  assert.deepEqual(timers.slice(3).map(t => t.delay), [1000, 2000, 4000, 8000, MAX_RETRY_DELAY, MAX_RETRY_DELAY, MAX_RETRY_DELAY, MAX_RETRY_DELAY])
+  // 凭证无效、房间不存在：提示一次，不再重试。
+  const scheduled = timers.length
+  answers.push({ ok: false, code: 'denied', message: '无法连接房间，请检查加入凭证' })
+  subscription.start()
+  assert.equal(timers.length, scheduled)
+  assert.deepEqual(denied, ['无法连接房间，请检查加入凭证'])
+  // socket 已断开或换成了新连接：迟到的回调直接忽略。
+  active = false
+  answers.push({ ok: true, room })
+  subscription.start()
+  assert.deepEqual(rooms, ['123456'])
+  assert.equal(timers.length, scheduled)
+})
+
+test('withStorage：存储被禁用或写满时不抛异常', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  try {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new DOMException('denied', 'SecurityError') } })
+    assert.equal(withStorage(storage => storage.getItem('x')), undefined)
+    const full = { setItem() { throw new DOMException('full', 'QuotaExceededError') }, getItem: () => '1' }
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: full })
+    assert.equal(withStorage(storage => storage.setItem('x', 'y')), undefined)
+    assert.equal(withStorage(storage => storage.getItem('x')), '1')
+  } finally {
+    if (original) Object.defineProperty(globalThis, 'localStorage', original)
+    else delete (globalThis as { localStorage?: unknown }).localStorage
+  }
 })
