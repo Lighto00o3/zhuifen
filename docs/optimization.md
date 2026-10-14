@@ -54,11 +54,11 @@
 - [ ] **15. 前端直接引用后端源码**
   前端里写的是 `../../../api/src/model`。建议抽出 `packages/shared` 包，放类型、规则和 `scoreDeltas`。
 - [x] **16. 同样的代码写了多份**
-  `ScoreApp.vue` 和 `local.vue` 改为共用 `LABELS`、`DEFAULT_RULES`、`CARD_SUITS`（`utils/pointCards.ts`），以及 `formatElapsed` / `clockTime`（`utils/format.ts`）；随机 ID 在 `2b40689` 中已合并。（未提交）
+  `ScoreApp.vue` 和 `local.vue` 改为共用 `LABELS`、`DEFAULT_RULES`、`CARD_SUITS`（`utils/pointCards.ts`），以及 `formatElapsed` / `clockTime`（`utils/format.ts`）；随机 ID 在 `2b40689` 中已合并。（`9bacf0c`）
 - [ ] **17. `ScoreApp.vue` 过大**
   有 400 多行，首页、房间页、弹窗、socket、命令队列全在一个组件里。建议拆出 `useRoom()` 组合函数和各个弹窗组件，焦点管理、滚动锁定也抽成公共的组合函数。
 - [ ] **18. 测试覆盖不足**
-  已补：随机 ID、历史上限（`2b40689`）；用时格式化、扑克牌拆分、联机历史与输赢计算（`test/utils.test.ts`，未提交）。
+  已补：随机 ID、历史上限（`2b40689`）；用时格式化、扑克牌拆分、联机历史与输赢计算（`test/utils.test.ts`，`9bacf0c`）。
   还缺：`receive()` 的增量动画逻辑，以及 `api()` 对非 JSON 响应的处理，这两处都在组件里，要先拆出 `useRoom()`（第 17 条）才好测。
 
 ## 六、信息泄露检查（2026-10-14）
@@ -68,7 +68,7 @@
 - [x] 没有密钥、密码、数据库连接串、私钥或云服务 AccessKey；本地 `apps/api/.env` 已被 `.gitignore` 忽略，从未提交过。
 - [x] 提交作者邮箱是 GitHub 的 noreply 地址，没有暴露真实邮箱。
 - [x] 仓库里还没有配置部署相关的变量和 Secret，最近 5 次 CI 日志里也没有服务器信息。
-- [x] **部署配置改用 Secret**：仓库公开时 Actions 日志任何人都能看，Variable 的值会原样显示，Secret 会显示为 `***`。`DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PATH` 已从 `vars` 改为 `secrets`，`docs/domestic.md` 同步更新。（未提交）
-- [x] README 里的局域网 IP `192.168.110.48` 换成了示例地址 `192.168.1.10`（内网地址本身风险很低）。（未提交）
+- [x] **部署配置改用 Secret**：仓库公开时 Actions 日志任何人都能看，Variable 的值会原样显示，Secret 会显示为 `***`。`DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PATH` 已从 `vars` 改为 `secrets`，`docs/domestic.md` 同步更新。（`3d1b0db`）
+- [x] README 里的局域网 IP `192.168.110.48` 换成了示例地址 `192.168.1.10`（内网地址本身风险很低）。（`3d1b0db`）
 - [ ] 第一个提交 `b3257a8` 的 README 里有本机路径 `/Users/Zhuanz/...`，暴露了 macOS 用户名。当前文件里已经没有了，但历史里还在；要清除，得改写全部提交历史并强制推送。风险很低，暂不处理。
 - 公开即可接受：Render 的访问地址、GitHub 用户名（本来就是公开信息）。
