@@ -107,9 +107,9 @@ async function api<T>(path: string, body?: unknown, token = session.value?.token
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   // 网关超时等情况会返回 HTML，不能直接按 JSON 解析。
-  const result = await response.json().catch(() => null) as { message?: string | string[] } | null
+  const result = await response.json().catch(() => null) as { message?: string | string[]; code?: string } | null
   if (!result) { const failure = new Error(response.ok ? '服务返回异常，请稍后重试' : '服务暂时不可用，请稍后重试'); Object.assign(failure, { status: response.ok ? undefined : response.status }); throw failure }
-  if (!response.ok) { const failure = new Error(Array.isArray(result.message) ? result.message.join('；') : result.message ?? '操作失败'); Object.assign(failure, { status: response.status }); throw failure }
+  if (!response.ok) { const failure = new Error(Array.isArray(result.message) ? result.message.join('；') : result.message ?? '操作失败'); Object.assign(failure, { status: response.status, code: result.code }); throw failure }
   return result as T
 }
 function receive(state: PublicRoom) {
@@ -159,10 +159,18 @@ function rememberRoomName(code: string, title?: string) {
   value.roomName = title
   localStorage.setItem('zhuifen:sessions', JSON.stringify(saved.value))
 }
+// 服务端会清理长期未使用的房间，房间不存在后不再保留它的凭证。
+function forgetSession(code: string) {
+  saved.value = saved.value.filter(s => s.code !== code)
+  localStorage.setItem('zhuifen:sessions', JSON.stringify(saved.value))
+  localStorage.removeItem(`zhuifen:pending:${code}`)
+}
 async function refreshRecent() {
   await Promise.allSettled(saved.value.slice(0, 3).map(async value => {
-    const state = await api<PublicRoom>(`/rooms/${value.code}`, undefined, value.token)
-    rememberRoomName(state.code, state.roomName)
+    try {
+      const state = await api<PublicRoom>(`/rooms/${value.code}`, undefined, value.token)
+      rememberRoomName(state.code, state.roomName)
+    } catch (e) { if ((e as { code?: string }).code === 'room_not_found') forgetSession(value.code) }
   }))
 }
 function saveSession(value: Session) {
@@ -214,7 +222,10 @@ async function enter() {
 async function resume(value: Session) {
   busy.value = true; error.value = ''; session.value = value; room.value = null
   try { const state = await api<PublicRoom>(`/rooms/${value.code}`); saveSession(value); receive(state); connect(); await navigateTo({ path: '/room', query: { room: value.code } }) }
-  catch (e) { session.value = null; error.value = (e as Error).message }
+  catch (e) {
+    session.value = null; error.value = (e as Error).message
+    if ((e as { code?: string }).code === 'room_not_found') forgetSession(value.code)
+  }
   finally { busy.value = false }
 }
 async function command(data: Record<string, unknown>) {

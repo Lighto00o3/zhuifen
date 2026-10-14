@@ -18,6 +18,9 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      # Render 的代理不过滤客户端自带的 X-Forwarded-For，限流改用 Cloudflare 写入的真实 IP。
+      - key: CLIENT_IP_HEADER
+        value: true-client-ip
   - type: web
     name: zhuifen-web-lighto00o3
     runtime: static

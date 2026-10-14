@@ -313,3 +313,36 @@ test('同桌重开：权限、继承与重置、历史快照、重试去重以�
     assert.equal(restored.rounds.length, 2); assert.deepEqual(restored.members.map((p: any) => p.score), [100, 100]);
   } finally { if (code) await app.get(Database).pool.query('DELETE FROM rooms WHERE code=$1', [code]); await app.close(); }
 });
+
+test('限流：同一 IP 每分钟最多创建 5 个房间、加入 10 次；过期房间自动清理', { timeout: 60000 }, async () => {
+  process.env.CLIENT_IP_HEADER = 'x-test-client-ip';
+  const app = await createApp(); await app.listen(0, '127.0.0.1');
+  const origin = await app.getUrl(); const codes: string[] = [];
+  const post = (path: string, body: unknown, ip: string) => fetch(`${origin}/api${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-test-client-ip': ip }, body: JSON.stringify(body) });
+  try {
+    for (let i = 0; i < 5; i++) {
+      const response = await post('/rooms', { name: '甲' }, '203.0.113.1');
+      assert.equal(response.status, 201); codes.push((await response.json()).session.code);
+    }
+    const limited = await post('/rooms', { name: '甲' }, '203.0.113.1');
+    assert.equal(limited.status, 429); assert.equal((await limited.json()).message, '操作太频繁，请稍后再试');
+    const other = await post('/rooms', { name: '甲' }, '203.0.113.2');
+    assert.equal(other.status, 201); codes.push((await other.json()).session.code);
+
+    // 同一凭证重试加入也计入次数，避免靠重试绕过限制。
+    const join = () => post(`/rooms/${codes[0]}/join`, { name: '乙', token: 'a'.repeat(64), requestId: randomUUID() }, '203.0.113.3');
+    for (let i = 0; i < 10; i++) assert.equal((await join()).status, 201);
+    assert.equal((await join()).status, 429);
+
+    const db = app.get(Database);
+    await db.pool.query("UPDATE rooms SET updated_at = now() - interval '8 days' WHERE code=$1", [codes[1]]);
+    await db.purgeExpiredRooms();
+    assert.equal((await db.pool.query('SELECT 1 FROM rooms WHERE code=$1', [codes[1]])).rowCount, 0);
+    assert.equal((await db.pool.query('SELECT 1 FROM rooms WHERE code=$1', [codes[2]])).rowCount, 1);
+    const missing = await fetch(`${origin}/api/rooms/${codes[1]}`, { headers: { Authorization: `Bearer ${'b'.repeat(64)}` } });
+    assert.equal(missing.status, 404); assert.equal((await missing.json()).code, 'room_not_found');
+  } finally {
+    delete process.env.CLIENT_IP_HEADER;
+    await app.get(Database).pool.query('DELETE FROM rooms WHERE code = ANY($1)', [codes]); await app.close();
+  }
+});

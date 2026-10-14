@@ -24,6 +24,8 @@ function uuid(value: unknown): string {
   if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) throw new BadRequestException('操作编号不正确');
   return value;
 }
+// 前端据此判断房间已被清理，与未知路由等其他 404 区分开。
+export const ROOM_NOT_FOUND = 'room_not_found';
 const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 function playerCount(value: unknown): PlayerCount {
   if (value === undefined) return 3;
@@ -59,7 +61,7 @@ export class Rooms {
   async read(code: string): Promise<RoomState> {
     this.validateCode(code);
     const result = await this.db.pool.query('SELECT state FROM rooms WHERE code=$1', [code]);
-    if (!result.rows[0]) throw new NotFoundException('房间不存在，请检查房间号');
+    if (!result.rows[0]) throw new NotFoundException({ message: '房间不存在，请检查房间号', code: ROOM_NOT_FOUND });
     return restoreState(result.rows[0].state);
   }
   async create(body: unknown) {
@@ -105,7 +107,7 @@ export class Rooms {
     try {
       await client.query('BEGIN');
       const result = await client.query('SELECT state FROM rooms WHERE code=$1 FOR UPDATE', [code]);
-      if (!result.rows[0]) throw new NotFoundException('房间不存在');
+      if (!result.rows[0]) throw new NotFoundException({ message: '房间不存在', code: ROOM_NOT_FOUND });
       const state = restoreState(result.rows[0].state);
       if (await update(state, client)) {
         state.version++;

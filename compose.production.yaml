@@ -24,6 +24,8 @@ services:
       PORT: "3001"
       DATABASE_URL: postgresql://zhuifen:${POSTGRES_PASSWORD:?请设置数据库密码}@db:5432/zhuifen
       CORS_ORIGINS: https://${DOMAIN:?请设置域名}
+      # 只经过 Caddy 一层代理，按 X-Forwarded-For 的最后一跳取真实 IP 用于限流。
+      TRUST_PROXY: "1"
     depends_on:
       db:
         condition: service_healthy
