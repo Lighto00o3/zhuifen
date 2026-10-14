@@ -28,14 +28,15 @@
 
 - [x] **6. 接口没有限流**
   创建房间可以被刷爆；加入房间只需要 6 位房间号，可以暴力枚举。
-  最终方案：同一 IP 每分钟最多创建 5 个房间、加入 10 次，超出返回 429「操作太频繁，请稍后再试」（`apps/api/src/limiter.ts`）。
+  最终方案：同一 IP 每分钟最多创建 5 个房间、加入 10 次，超出返回 429「操作太频繁，请稍后再试」（`apps/api/src/limiter.ts`，`0eb0fd2`）。
   真实 IP 的获取方式：
   - Render：它的代理不过滤客户端自带的 `X-Forwarded-For`，所以改读 Cloudflare 写入的 `True-Client-IP`（`render.yaml` 中设置 `CLIENT_IP_HEADER`）。上线后要实测一次：同一网络连续创建 6 次，第 6 次应被拦；换手机流量后仍可创建。如果所有人都被拦，说明没取到真实 IP。
   - Caddy 部署：`compose.production.yaml` 中设置 `TRUST_PROXY=1`。
   计数存在进程内存里，只适用于单实例（见第 8 条）。
-  **线上实测（2026-10-14）**：第一次测试时，电脑被限流后手机流量也被拦。原因是线上 Render 服务不是从 Blueprint 创建的，`render.yaml` 里的 `CLIENT_IP_HEADER` 没有生效，所有用户共用代理的 IP。已在 Render 控制台手动添加该变量，并加上启动警告：生产环境没配置 IP 来源、或配置的请求头不存在时，会在日志里提示。待重新部署后复测。
+  **线上实测（2026-10-14）**：第一次测试时，电脑被限流后手机流量也被拦。原因是线上 Render 服务不是从 Blueprint 创建的，`render.yaml` 里的 `CLIENT_IP_HEADER` 没有生效，所有用户共用代理的 IP。已在 Render 控制台手动添加该变量，并加上启动警告：生产环境没配置 IP 来源、或配置的请求头不存在时，会在日志里提示（`c85dea9`）。
+  **复测通过**：电脑被限流期间，手机流量仍可正常创建房间；伪造 `X-Forwarded-For` / `True-Client-IP` 都无法绕过。
 - [x] **7. 数据只增不减**
-  保留天数：七天。超过 7 天没有任何操作的房间，连同命令记录一起删除；启动时清理一次，之后每小时一次。已给 `updated_at` 加索引，天数可用 `ROOM_RETENTION_DAYS` 调整。
+  保留天数：七天。超过 7 天没有任何操作的房间，连同命令记录一起删除；启动时清理一次，之后每小时一次。已给 `updated_at` 加索引，天数可用 `ROOM_RETENTION_DAYS` 调整（`0eb0fd2`）。
   房间被删除后，服务端返回 `code: room_not_found`，前端随即删掉本机保存的这个房间的凭证；设备上已缓存的历史对局仍然保留。只认这个错误码，接口地址配错导致的 404 不会误删凭证。
 - [ ] **8. 不能多实例部署**
   在线状态 `presence` 存在进程内存里，广播也只发给本进程。目前单实例没问题；以后扩容要接 `@socket.io/redis-adapter`，并在部署文档里写明这个限制。
@@ -62,11 +63,15 @@
   前端里写的是 `../../../api/src/model`。建议抽出 `packages/shared` 包，放类型、规则和 `scoreDeltas`。
 - [x] **16. 同样的代码写了多份**
   `ScoreApp.vue` 和 `local.vue` 改为共用 `LABELS`、`DEFAULT_RULES`、`CARD_SUITS`（`utils/pointCards.ts`），以及 `formatElapsed` / `clockTime`（`utils/format.ts`）；随机 ID 在 `2b40689` 中已合并。（`9bacf0c`）
-- [ ] **17. `ScoreApp.vue` 过大**
-  有 400 多行，首页、房间页、弹窗、socket、命令队列全在一个组件里。建议拆出 `useRoom()` 组合函数和各个弹窗组件，焦点管理、滚动锁定也抽成公共的组合函数。
-- [ ] **18. 测试覆盖不足**
-  已补：随机 ID、历史上限（`2b40689`）；用时格式化、扑克牌拆分、联机历史与输赢计算（`test/utils.test.ts`，`9bacf0c`）。
-  还缺：`receive()` 的增量动画逻辑，以及 `api()` 对非 JSON 响应的处理，这两处都在组件里，要先拆出 `useRoom()`（第 17 条）才好测。
+- [x] **17. `ScoreApp.vue` 过大**
+  从 418 行拆到 236 行（剩下的主要是首页和房间页的模板）：
+  - `composables/useRoom.ts`：房间状态、socket 连接、命令队列与重试。
+  - `composables/useModalFocus.ts`：弹窗聚焦、Tab 循环、Esc 关闭、滚动锁定；单机页的滚动锁定也改用它（`useScrollLock`），离开页面时会恢复滚动。
+  - 弹窗组件：`InviteDialog`、`SettingsDialog`、`RecipientDialog`、`ConfirmDialog`；积分提示 `ScoreNotices`。
+  - 纯逻辑：`utils/api.ts`（请求与错误处理）、`utils/roomChanges.ts`（比较前后状态，算出动画和提示）、`utils/sessions.ts`（本机房间凭证，历史页也改用它）。
+  顺手修复：关闭弹窗后焦点没有回到原来的按钮（页面当时还处于 `inert` 状态，无法聚焦）。
+- [x] **18. 测试覆盖不足**
+  已补：随机 ID、历史上限（`2b40689`）；用时格式化、扑克牌拆分、联机历史与输赢计算（`test/utils.test.ts`，`9bacf0c`）；请求的非 JSON 响应与错误码、记分动画与撤销的增量判断、房间凭证的读写与清理（`test/room.test.ts`）。
 
 ## 六、信息泄露检查（2026-10-14）
 

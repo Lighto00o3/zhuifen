@@ -23,12 +23,7 @@ const error = ref('')
 const storageError = ref('')
 const dialog = ref<HTMLDialogElement | null>(null)
 const action = ref<'give' | 'undo' | 'end' | 'new' | null>(null)
-let previousOverflow = ''
-watch(action, (value, previous) => {
-  if (!import.meta.client) return
-  if (value && !previous) { previousOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden' }
-  else if (!value) document.body.style.overflow = previousOverflow
-})
+useScrollLock(computed(() => !!action.value))
 const kind = ref<ScoreKind>('normal')
 const transfers = ref<{ enqueue: (t: Transfer) => void } | null>(null)
 const last = computed(() => game.value?.events.findLast(e => !e.undoneAt))
@@ -102,7 +97,7 @@ function restore() {
 }
 function storageChanged(e: StorageEvent) { if (e.key === LOCAL_GAME_KEY || e.key === LOCAL_GAMES_KEY) { close(); restore() } }
 onMounted(() => { restore(); ready.value = true; timer = setInterval(tick, 1000); window.addEventListener('storage', storageChanged) })
-onBeforeUnmount(() => { if (action.value) document.body.style.overflow = previousOverflow; clearInterval(timer); window.removeEventListener('storage', storageChanged) })
+onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storage', storageChanged) })
 </script>
 
 <template>

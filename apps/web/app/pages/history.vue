@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { loadLocalGames } from '../utils/localGame'
 import { cacheOnlineGames, ONLINE_HISTORY_KEY, gameDelta, type HistoryGame } from '../utils/gameHistory'
-import type { PublicRoom, Session } from '../../../api/src/model'
+import { forgetSessions, loadSessions } from '../utils/sessions'
+import type { PublicRoom } from '../../../api/src/model'
 useHead({ title: '历史对局 · 追分' })
 const route = useRoute()
 const apiOrigin = useRuntimeConfig().public.apiOrigin.replace(/\/$/, '')
@@ -24,9 +25,9 @@ onMounted(async () => {
   load()
   let failures = 0
   try {
-    const sessions: Session[] = JSON.parse(localStorage.getItem('zhuifen:sessions') ?? '[]')
+    const sessions = loadSessions(localStorage)
     const expired = new Set<string>()
-    if (Array.isArray(sessions)) await Promise.allSettled(sessions.map(async s => {
+    await Promise.allSettled(sessions.map(async s => {
       try {
         const response = await fetch(`${apiOrigin}/api/rooms/${s.code}`, { headers: { Authorization: `Bearer ${s.token}` }, signal: AbortSignal.timeout(12000) })
         // 房间已被服务端清理：缓存里的历史仍保留，只是不再尝试更新。
@@ -36,7 +37,7 @@ onMounted(async () => {
         cacheOnlineGames(localStorage, body as PublicRoom)
       } catch { failures++ }
     }))
-    if (expired.size) localStorage.setItem('zhuifen:sessions', JSON.stringify(sessions.filter(s => !expired.has(s.code))))
+    if (expired.size) forgetSessions(localStorage, sessions, expired)
     load()
     if (failures && !error.value) error.value = '部分联机房间暂时无法更新，已保存的历史仍可查看。'
   } catch { error.value = '房间凭证无法读取，已保存的历史仍可查看。' }
