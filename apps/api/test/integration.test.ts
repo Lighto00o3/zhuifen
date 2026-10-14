@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { io, Socket } from 'socket.io-client';
+import { Pool } from 'pg';
 import { createApp } from '../src/main';
 import { Database } from '../src/database';
 import type { PublicRoom, Session } from '@zhuifen/shared';
@@ -361,4 +362,19 @@ test('限流：同一 IP 每分钟最多创建 5 个房间、加入 10 次；过
     delete process.env.CLIENT_IP_HEADER;
     await app.get(Database).pool.query('DELETE FROM rooms WHERE code = ANY($1)', [codes]); await app.close();
   }
+});
+
+test('数据库空闲连接被断开时服务不退出，下一次请求重新连接', { timeout: 30000 }, async () => {
+  const app = await createApp(); await app.listen(0, '127.0.0.1');
+  const origin = await app.getUrl();
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    // 查询结束后连接回到池里处于空闲状态，从数据库端断开它，模拟 Neon 重启计算节点或网络中断。
+    const pid = (await app.get(Database).pool.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+    await admin.query('SELECT pg_terminate_backend($1)', [pid]);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const health = await fetch(`${origin}/api/health`);
+    assert.equal(health.status, 200);
+    assert.notEqual((await app.get(Database).pool.query('SELECT pg_backend_pid() AS pid')).rows[0].pid, pid);
+  } finally { await admin.end(); await app.close(); }
 });
