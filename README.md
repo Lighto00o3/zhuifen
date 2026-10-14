@@ -120,8 +120,11 @@ compose.yaml           可选 PostgreSQL 容器
 npm run typecheck
 npm test
 npm run test:integration
+npm run test:e2e
 npm run build
 ```
+
+`npm run test:e2e` 用 Playwright 启动 API 和前端开发服务器（已经在运行时直接复用），在浏览器里走一遍联机双人和单机三人的主要流程。本地使用电脑上安装的 Google Chrome；CI 中先执行 `npx playwright install --with-deps chromium`。
 
 集成测试需要可连接的 PostgreSQL，会创建独立随机测试房间，并在结束时仅删除自己创建的房间。覆盖双人及三人广播、人数限制、旧房间兼容、积分转移、并发操作、重复提交、权限、撤销、断线重连和 API 重启后的数据库恢复。
 
