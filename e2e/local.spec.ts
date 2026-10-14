@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { open, ready } from './helpers'
 
 test('单机三人：开局、犯规给上家、普胜选人、撤销、结束、历史页', async ({ page }) => {
-  await page.goto('/local?new=1')
+  await open(page, '/local?new=1')
   await page.getByPlaceholder('球友 1 的昵称').fill('甲')
   await page.getByPlaceholder('球友 2 的昵称').fill('乙')
   await page.getByPlaceholder('球友 3 的昵称').fill('丙')
@@ -28,13 +29,14 @@ test('单机三人：开局、犯规给上家、普胜选人、撤销、结束�
 
   // 刷新后从本机记录恢复。
   await page.reload()
+  await ready(page)
   await expect(scores).toHaveText(['99分', '100分', '101分'])
 
   await page.getByRole('button', { name: '结束本场' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '确认结束' }).click()
   await expect(page.getByRole('heading', { name: '这一场，收杆了' })).toBeVisible()
 
-  await page.goto('/history')
+  await open(page, '/history')
   const game = page.locator('.history-game')
   await expect(game).toHaveCount(1)
   await expect(game).toContainText('单机测试局')

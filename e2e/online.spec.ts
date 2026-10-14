@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { open, ready } from './helpers'
 
 const scores = (page: Page) => page.locator('.score-number')
 
@@ -7,7 +8,7 @@ test('联机双人：创建房间、扫码加入、实时记分、撤销、结�
   const host = await (await browser.newContext()).newPage()
   const guest = await (await browser.newContext()).newPage()
 
-  await host.goto('/')
+  await open(host, '/')
   await host.getByLabel('你的昵称').fill('甲')
   await host.getByLabel('房间名（选填）').fill('端到端测试局')
   await host.getByRole('button', { name: '双人追分' }).click()
@@ -26,7 +27,7 @@ test('联机双人：创建房间、扫码加入、实时记分、撤销、结�
   await expect(inviteButton).toBeFocused()
 
   // 乙扫码打开邀请链接加入。
-  await guest.goto(link)
+  await open(guest, link)
   await guest.getByLabel('你的昵称').fill('乙')
   await guest.getByRole('button', { name: '加入这一桌' }).click()
   await expect(guest.getByText('实时同步中')).toBeVisible()
@@ -65,6 +66,7 @@ test('联机双人：创建房间、扫码加入、实时记分、撤销、结�
 
   // 乙刷新页面：自动回到房间，比分还在，也不会重放之前的记分动画。
   await guest.reload()
+  await ready(guest)
   await expect(guest.getByText('实时同步中')).toBeVisible()
   await expect(scores(guest)).toHaveText(['99分', '101分'])
   await expect(guest.locator('.transfer-caption')).toHaveCount(0)
@@ -77,7 +79,7 @@ test('联机双人：创建房间、扫码加入、实时记分、撤销、结�
   await expect(guest.getByRole('heading', { name: '这一场，收杆了' })).toBeVisible()
 
   // 历史页能看到这两局，比分正确。
-  await guest.goto('/history')
+  await open(guest, '/history')
   const games = guest.locator('.history-game')
   await expect(games).toHaveCount(2)
   await expect(games.nth(0)).toContainText('端到端测试局')
@@ -85,6 +87,6 @@ test('联机双人：创建房间、扫码加入、实时记分、撤销、结�
   await expect(games.nth(1).locator('.history-scores')).toContainText('甲99')
 
   // 回到首页，最近的房间里有这个房间。
-  await guest.goto('/')
+  await open(guest, '/')
   await expect(guest.locator('.recent')).toContainText('端到端测试局')
 })
