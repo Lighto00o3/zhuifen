@@ -2,6 +2,7 @@
 import { DEFAULT_RULES, LABELS, type Rules, type ScoreKind } from '../../../api/src/model'
 import { createLocalGame, giveLocal, undoLocal, loadLocalGames, storeLocalGame, rematchLocal, LOCAL_GAME_KEY, LOCAL_GAMES_KEY, type LocalGame } from '../utils/localGame'
 import { pointCards } from '../utils/pointCards'
+import { randomId } from '../utils/random'
 import type { Transfer } from '../components/CardTransfer.vue'
 
 useHead({ title: '单机记分 · 追分' })
@@ -73,7 +74,7 @@ function give(recipientId?: string) {
 function animate(deltas: Record<string, number>, undo: boolean) {
   const entries = Object.entries(deltas).map(([id, d]) => [id, undo ? -d : d] as const)
   const from = entries.find(([, d]) => d < 0), to = entries.find(([, d]) => d > 0)
-  if (from && to) transfers.value?.enqueue({ id: crypto.randomUUID(), from: from[0], to: to[0], fromName: person(from[0]), toName: person(to[0]), points: to[1], undo, suit: suits[kind.value] })
+  if (from && to) transfers.value?.enqueue({ id: randomId(), from: from[0], to: to[0], fromName: person(from[0]), toName: person(to[0]), points: to[1], undo, suit: suits[kind.value] })
 }
 function confirm() {
   if (!game.value) return

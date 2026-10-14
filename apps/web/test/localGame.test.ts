@@ -60,3 +60,40 @@ test('重开保留球友规则；继承积分后本场从零计算；历史原�
   assert.throws(() => storeLocalGame({ ...storage, setItem: () => { throw new Error('full') } }, rematchLocal(first, false)))
   assert.equal(storage.getItem(LOCAL_GAMES_KEY), before)
 })
+
+test('没有 crypto.randomUUID（局域网 HTTP）时也能开局', async () => {
+  const original = crypto.randomUUID
+  Object.defineProperty(crypto, 'randomUUID', { value: undefined, configurable: true })
+  try {
+    const game = createLocalGame(['甲', '乙'], '', 100, DEFAULT_RULES)
+    const scored = giveLocal(game, game.members[0]!.id, 'normal', game.members[1]!.id)
+    assert.match(scored.events[0]!.id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    assert.deepEqual(readLocalGame(JSON.stringify(scored)), scored)
+  } finally { Object.defineProperty(crypto, 'randomUUID', { value: original, configurable: true }) }
+})
+
+test('本机与联机历史只保留最近的场次', async () => {
+  const { storeLocalGame, loadLocalGames, MAX_LOCAL_GAMES } = await import('../app/utils/localGame')
+  const { cacheOnlineGames, ONLINE_HISTORY_KEY, MAX_ONLINE_GAMES } = await import('../app/utils/gameHistory')
+  const memory = new Map<string, string>()
+  const storage = { getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => { memory.set(key, value) } }
+  const ids: string[] = []
+  for (let i = 0; i < MAX_LOCAL_GAMES + 5; i++) {
+    const game = createLocalGame(['甲', '乙'], '', 100, DEFAULT_RULES)
+    ids.push(game.id); storeLocalGame(storage, game)
+  }
+  const store = loadLocalGames(storage)
+  assert.equal(store.games.length, MAX_LOCAL_GAMES)
+  assert.equal(store.currentId, ids.at(-1))
+  assert.deepEqual(store.games.map(g => g.id), ids.slice(-MAX_LOCAL_GAMES))
+
+  const base = Date.parse('2026-01-01T00:00:00Z')
+  for (let i = 0; i < MAX_ONLINE_GAMES + 5; i++) {
+    const startedAt = new Date(base + i * 60_000).toISOString(), endedAt = new Date(base + i * 60_000 + 1000).toISOString()
+    cacheOnlineGames(storage, { code: String(100000 + i), hostId: 'h', status: 'ended', version: 1, playerCount: 2, initialScore: 100, rules: DEFAULT_RULES,
+      members: [], events: [], createdAt: startedAt, startedAt, endedAt })
+  }
+  const online = JSON.parse(storage.getItem(ONLINE_HISTORY_KEY)!) as { code: string }[]
+  assert.equal(online.length, MAX_ONLINE_GAMES)
+  assert.equal(online[0]!.code, String(100000 + MAX_ONLINE_GAMES + 4))
+})

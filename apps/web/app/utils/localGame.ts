@@ -1,4 +1,5 @@
 import { DEFAULT_RULES, LABELS, scoreDeltas, type Player, type Rules, type ScoreEvent, type ScoreKind } from '../../../api/src/model'
+import { randomId } from './random'
 
 export interface LocalGame {
   id: string
@@ -17,12 +18,12 @@ export function createLocalGame(names: string[], name: string, initialScore: num
   if (![2, 3].includes(cleaned.length) || cleaned.some(n => !n || n.length > 12) || new Set(cleaned).size !== cleaned.length) throw new Error('请填写不同的球友昵称，每个最多 12 个字。')
   if (!Number.isInteger(initialScore) || initialScore < 1 || initialScore > 10000) throw new Error('初始积分需要在 1–10000 之间。')
   if (Object.keys(DEFAULT_RULES).some(k => !Number.isInteger(rules[k as ScoreKind]) || rules[k as ScoreKind] < 1 || rules[k as ScoreKind] > 100)) throw new Error('各项分值需要在 1–100 之间。')
-  return { id: crypto.randomUUID(), name: name.trim().slice(0, 24), initialScore, rules: { ...rules }, members: cleaned.map(name => ({ id: crypto.randomUUID(), name, score: initialScore })), events: [], startedAt: new Date().toISOString() }
+  return { id: randomId(), name: name.trim().slice(0, 24), initialScore, rules: { ...rules }, members: cleaned.map(name => ({ id: randomId(), name, score: initialScore })), events: [], startedAt: new Date().toISOString() }
 }
 export function giveLocal(game: LocalGame, actorId: string, kind: ScoreKind, recipientId?: string): LocalGame {
   if (game.endedAt) throw new Error('本场已经结束。')
   const deltas = scoreDeltas(game.members, actorId, kind, game.rules, recipientId)
-  const event: ScoreEvent = { id: crypto.randomUUID(), kind, actorId, label: LABELS[kind], deltas, createdAt: new Date().toISOString() }
+  const event: ScoreEvent = { id: randomId(), kind, actorId, label: LABELS[kind], deltas, createdAt: new Date().toISOString() }
   return { ...game, members: game.members.map(p => ({ ...p, score: p.score + (deltas[p.id] ?? 0) })), events: [...game.events, event] }
 }
 export function undoLocal(game: LocalGame): LocalGame {
@@ -57,9 +58,12 @@ export function loadLocalGames(storage: Pick<Storage, 'getItem'>): LocalGames {
   const game = readLocalGame(legacy)
   return { currentId: game.id, games: [game] }
 }
+// 只保留最近的若干场，避免本机存储写满后当前这一场也无法保存。
+export const MAX_LOCAL_GAMES = 50
 export function storeLocalGame(storage: Pick<Storage, 'getItem' | 'setItem'>, game: LocalGame): void {
   const store = loadLocalGames(storage)
-  storage.setItem(LOCAL_GAMES_KEY, JSON.stringify({ currentId: game.id, games: [...store.games.filter(g => g.id !== game.id), game] }))
+  const games = [...store.games.filter(g => g.id !== game.id), game].slice(-MAX_LOCAL_GAMES)
+  storage.setItem(LOCAL_GAMES_KEY, JSON.stringify({ currentId: game.id, games }))
 }
 export function rematchLocal(game: LocalGame, carry: boolean): LocalGame {
   if (!game.endedAt) throw new Error('请先结束本场，再开一局。')

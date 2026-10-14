@@ -3,6 +3,7 @@ import { io, type Socket } from 'socket.io-client'
 import QRCode from 'qrcode'
 import { pointCards } from '../utils/pointCards'
 import { cacheOnlineGames } from '../utils/gameHistory'
+import { randomHex, randomId } from '../utils/random'
 import type { PlayerCount, PublicRoom, Rules, ScoreKind, Session } from '../../../api/src/model'
 
 const route = useRoute()
@@ -106,7 +107,9 @@ async function api<T>(path: string, body?: unknown, token = session.value?.token
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  const result = await response.json()
+  // 网关超时等情况会返回 HTML，不能直接按 JSON 解析。
+  const result = await response.json().catch(() => null) as { message?: string | string[] } | null
+  if (!result) { const failure = new Error(response.ok ? '服务返回异常，请稍后重试' : '服务暂时不可用，请稍后重试'); Object.assign(failure, { status: response.ok ? undefined : response.status }); throw failure }
   if (!response.ok) { const failure = new Error(Array.isArray(result.message) ? result.message.join('；') : result.message ?? '操作失败'); Object.assign(failure, { status: response.status }); throw failure }
   return result as T
 }
@@ -197,8 +200,7 @@ async function enter() {
     if (tab.value === 'create') result = await api('/rooms', { name: nickname.value, roomName: roomName.value, playerCount: playerCount.value, initialScore: initialScore.value, rules })
     else {
       if (!joining || joining.code !== roomCode.value || joining.name !== nickname.value.trim()) {
-        const bytes = crypto.getRandomValues(new Uint8Array(32))
-        joining = { code: roomCode.value, name: nickname.value.trim(), token: Array.from(bytes, b => b.toString(16).padStart(2, '0')).join(''), requestId: requestId() }
+        joining = { code: roomCode.value, name: nickname.value.trim(), token: randomHex(32), requestId: randomId() }
       }
       result = await api(`/rooms/${roomCode.value}/join`, joining)
     }
@@ -213,15 +215,9 @@ async function resume(value: Session) {
   catch (e) { session.value = null; error.value = (e as Error).message }
   finally { busy.value = false }
 }
-// crypto.randomUUID 在手机通过局域网 HTTP 打开时不可用，使用随机字节构造 UUID。
-function requestId() {
-  const bytes = crypto.getRandomValues(new Uint8Array(16)); bytes[6] = (bytes[6]! & 15) | 64; bytes[8] = (bytes[8]! & 63) | 128
-  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
-}
 async function command(data: Record<string, unknown>) {
   if (!connected.value || busy.value || pending.value) return
-  pending.value = { ...data, roundId: room.value?.roundId, requestId: requestId() }
+  pending.value = { ...data, roundId: room.value?.roundId, requestId: randomId() }
   localStorage.setItem(`zhuifen:pending:${session.value!.code}`, JSON.stringify(pending.value))
   await retry()
 }
