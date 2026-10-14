@@ -35,6 +35,17 @@ jobs:
           node-version: 24.21.0
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      # 自建服务器部署用的 compose 文件：检查格式，并确认引用的 Dockerfile 都存在。
+      - name: Check production compose file
+        env:
+          DOMAIN: example.com
+          POSTGRES_PASSWORD: ci-only
+          DEPLOY_TAG: ci
+        run: |
+          docker compose -f compose.production.yaml -f compose.images.yaml config --quiet
+          for file in $(docker compose -f compose.production.yaml config --format json | jq -r '.services[] | select(.build) | .build.dockerfile'); do
+            test -f "$file" || { echo "compose.production.yaml 引用的 $file 不存在"; exit 1; }
+          done
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:integration

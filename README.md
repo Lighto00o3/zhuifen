@@ -144,7 +144,7 @@ Socket.IO 默认生产环境使用同域 `/socket.io/`，开发环境直连同�
 
 目前已使用 [Render + Neon](docs/render.md) 免费套餐上线，合并到 `main` 后检查通过即自动部署，国内访问速度需实测。面向国内用户也可采用 [国内服务器与自动上线说明](docs/domestic.md)。另有 [Railway 部署说明](docs/railway.md) 可选。
 
-自行购买服务器时可以使用 [公网部署说明](docs/deployment.md) 中的 Docker Compose + Caddy：一个域名统一提供 HTTPS 页面、接口与实时连接，球友可分别使用手机流量。`Dockerfile` 包含 API / Web 两个生产镜像目标，`compose.production.yaml` 包含持久化 PostgreSQL 与自动 HTTPS 网关。
+自行购买服务器时可以使用 [公网部署说明](docs/deployment.md) 中的 Docker Compose + Caddy：一个域名统一提供 HTTPS 页面、接口与实时连接，球友可分别使用手机流量。`deploy/Dockerfile.api`、`deploy/Dockerfile.web` 分别是 API / Web 的生产镜像（Render、Railway 和 CI 用的也是这两个文件），`compose.production.yaml` 包含持久化 PostgreSQL 与自动 HTTPS 网关。
 
 也可以自行管理 Node 进程。生产构建后：API 使用 `npm run start -w @zhuifen/api`；Nuxt 使用 `npm run start -w @zhuifen/web`，需要使用支持的 Node 版本。
 

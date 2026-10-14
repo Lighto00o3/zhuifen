@@ -18,7 +18,7 @@ services:
   api:
     build:
       context: .
-      target: api
+      dockerfile: deploy/Dockerfile.api
     restart: unless-stopped
     environment:
       PORT: "3001"
@@ -38,7 +38,7 @@ services:
   web:
     build:
       context: .
-      target: web
+      dockerfile: deploy/Dockerfile.web
     restart: unless-stopped
     environment:
       PORT: "3000"
