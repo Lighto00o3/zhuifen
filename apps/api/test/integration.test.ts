@@ -271,3 +271,44 @@ test('房主关闭未开局房间：实时通知、权限、重试、拒绝加�
     await app.close();
   }
 });
+
+test('同桌重开：权限、继承与重置、历史快照、重试去重以及过期操作隔离', { timeout: 60000 }, async () => {
+  const app = await createApp(); await app.listen(0, '127.0.0.1');
+  const origin = await app.getUrl(); let code: string | undefined;
+  async function req(path: string, data?: unknown, session?: Session, status = 201): Promise<any> {
+    const response = await fetch(`${origin}/api${path}`, { method: data === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.token}` } : {}) }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const result = await response.json(); assert.equal(response.status, status, JSON.stringify(result)); return result;
+  }
+  const cmd = (s: Session, data: Record<string, unknown>, status = 201) => req(`/rooms/${s.code}/commands`, { requestId: randomUUID(), ...data }, s, status);
+  try {
+    const created = await req('/rooms', { name: '甲', playerCount: 2, roomName: '朋友局' });
+    const a: Session = created.session; code = a.code;
+    const b: Session = (await req(`/rooms/${code}/join`, { name: '乙', token: randomBytes(32).toString('hex'), requestId: randomUUID() })).session;
+    await cmd(a, { type: 'restart', carry: false }, 409);
+    await cmd(a, { type: 'start' });
+    await cmd(b, { type: 'score', kind: 'normal', recipientId: a.playerId });
+    const ended = await cmd(a, { type: 'end' });
+    await cmd(b, { type: 'restart', carry: true }, 403);
+    await cmd(a, { type: 'restart', carry: 'yes' }, 400);
+    const restartId = randomUUID();
+    const next = await cmd(a, { type: 'restart', carry: true, requestId: restartId });
+    assert.equal(next.rounds.length, 1); assert.equal(next.events.length, 0);
+    assert.deepEqual(next.members.map((p: any) => p.score), [104, 96]);
+    assert.deepEqual(next.startingScores, { [a.playerId]: 104, [b.playerId]: 96 });
+    assert.deepEqual(next.rounds[0].events, ended.events);
+    assert.equal(JSON.stringify(next).includes('tokenHash'), false);
+    assert.equal((await cmd(a, { type: 'restart', carry: true, requestId: restartId })).version, next.version);
+    await cmd(b, { type: 'score', kind: 'foul' }, 409);
+    await cmd(a, { type: 'end' }, 409);
+    const score = await cmd(b, { type: 'score', kind: 'foul', roundId: restartId });
+    assert.deepEqual(score.members.map((p: any) => p.score), [105, 95]);
+    await cmd(a, { type: 'end', roundId: restartId });
+    const reset = await cmd(a, { type: 'restart', carry: false });
+    assert.equal(reset.rounds.length, 2);
+    assert.deepEqual(reset.members.map((p: any) => p.score), [100, 100]);
+    assert.deepEqual(reset.rounds[0].events, ended.events);
+    await cmd(b, { type: 'score', kind: 'foul', roundId: restartId }, 409);
+    const restored = await req(`/rooms/${code}`, undefined, b, 200);
+    assert.equal(restored.rounds.length, 2); assert.deepEqual(restored.members.map((p: any) => p.score), [100, 100]);
+  } finally { if (code) await app.get(Database).pool.query('DELETE FROM rooms WHERE code=$1', [code]); await app.close(); }
+});

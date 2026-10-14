@@ -36,3 +36,27 @@ test('拒绝重复昵称、非法分值和损坏的本机记录', () => {
   game.members[0]!.score++
   assert.throws(() => readLocalGame(JSON.stringify(game)))
 })
+
+test('重开保留球友规则；继承积分后本场从零计算；历史原子存储与旧数据迁移', async () => {
+  const { rematchLocal, loadLocalGames, storeLocalGame, LOCAL_GAME_KEY, LOCAL_GAMES_KEY } = await import('../app/utils/localGame')
+  const memory = new Map<string, string>()
+  const storage = { getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => { memory.set(key, value) } }
+  let first = createLocalGame(['甲', '乙'], '朋友局', 100, DEFAULT_RULES)
+  first = { ...giveLocal(first, first.members[0]!.id, 'normal', first.members[1]!.id), endedAt: new Date().toISOString() }
+  storage.setItem(LOCAL_GAME_KEY, JSON.stringify(first))
+  assert.equal(loadLocalGames(storage).games.length, 1)
+  const carry = rematchLocal(first, true)
+  assert.deepEqual(carry.members.map(p => p.score), [96, 104])
+  assert.ok(carry.members.every(p => p.score === carry.startingScores![p.id]))
+  assert.deepEqual(readLocalGame(JSON.stringify(carry)), carry)
+  storeLocalGame(storage, carry)
+  const store = loadLocalGames(storage)
+  assert.equal(store.currentId, carry.id)
+  assert.equal(store.games.length, 2)
+  assert.deepEqual(store.games[0], first)
+  assert.deepEqual(rematchLocal(first, false).members.map(p => p.score), [100, 100])
+  assert.throws(() => rematchLocal(carry, false))
+  const before = storage.getItem(LOCAL_GAMES_KEY)
+  assert.throws(() => storeLocalGame({ ...storage, setItem: () => { throw new Error('full') } }, rematchLocal(first, false)))
+  assert.equal(storage.getItem(LOCAL_GAMES_KEY), before)
+})

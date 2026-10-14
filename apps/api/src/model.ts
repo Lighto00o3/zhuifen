@@ -9,10 +9,14 @@ export interface ScoreEvent {
   id: string; kind: ScoreKind; actorId: string; label: string;
   deltas: Record<string, number>; createdAt: string; undoneAt?: string;
 }
+export interface RoundRecord {
+  id: string; roomName?: string; initialScore: number; startingScores?: Record<string, number>;
+  rules: Rules; members: Player[]; events: ScoreEvent[]; startedAt: string; endedAt: string;
+}
 export interface RoomState {
   code: string; roomName?: string; hostId: string; status: 'waiting' | 'playing' | 'ended' | 'closed';
   version: number; playerCount: PlayerCount; initialScore: number; rules: Rules; members: Member[];
-  events: ScoreEvent[]; createdAt: string; startedAt?: string; endedAt?: string; closedAt?: string;
+  events: ScoreEvent[]; rounds?: RoundRecord[]; roundId?: string; startingScores?: Record<string, number>; createdAt: string; startedAt?: string; endedAt?: string; closedAt?: string;
 }
 export interface PublicRoom extends Omit<RoomState, 'members'> {
   members: (Player & { online: boolean })[];

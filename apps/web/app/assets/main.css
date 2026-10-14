@@ -256,3 +256,28 @@ summary::-webkit-details-marker { display: none; }
 .local-mode-entry b { display: block; font-size: 16px; }
 .local-mode-entry small { display: block; color: var(--muted); font-size: 12px; margin-top: 5px; }
 .local-mode-entry > span:last-child { font-size: 24px; color: var(--green); }
+
+.rematch-options { display: grid; gap: 10px; margin: 22px 0; }
+.rematch-options button[aria-pressed="true"] { background: var(--primary); color: var(--primary-ink); }
+.finished-panel > .secondary { display: inline-flex; margin-left: 10px; text-decoration: none; }
+.history-page { padding-bottom: 40px; }
+.history-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 24px; }
+.history-filters .mode-picker { min-width: 220px; margin: 0; }
+.history-filters .field { margin: 0; }
+.history-filters input { min-height: 44px; }
+.history-games { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.history-game { display: block; padding: 24px; background: var(--surface); color: var(--ink); text-decoration: none; border-radius: 22px; }
+.history-game-heading { display: flex; justify-content: space-between; gap: 12px; font-size: 18px; }
+.history-game-heading span, .history-game time { color: var(--muted); font-size: 12px; }
+.history-game time { display: block; margin-top: 8px; }
+.history-scores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 24px 0; }
+.history-scores > div { display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
+.history-scores span { font-size: 13px; }
+.history-scores b { font-size: 28px; font-variant-numeric: tabular-nums; }
+.history-scores small { display: block; font-size: 12px; margin-top: 4px; }
+.history-game-foot { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+.history-game-foot > span { color: var(--green); }
+.history-storage-note { color: var(--muted); font-size: 12px; line-height: 1.8; margin-top: 24px; }
+.history-detail { margin-top: 24px; }
+@media (max-width: 760px) { .history-games { grid-template-columns: 1fr; }.history-game { padding: 20px; }.history-filters { align-items: flex-end; }.history-filters .mode-picker { width: 100%; }.history-scores b { font-size: 25px; } }
+.history-filters .mode-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); }

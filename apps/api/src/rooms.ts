@@ -130,6 +130,7 @@ export class Rooms {
         return false;
       }
       const hostOnly = () => { if (actor.id !== state.hostId) throw new ForbiddenException('只有房主可以操作'); };
+      if (['score', 'undo', 'end'].includes(String(data.type)) && state.roundId && data.roundId !== state.roundId) throw new ConflictException('已进入新一局，请查看最新比分后再操作');
       switch (data.type) {
         case 'close':
           hostOnly();
@@ -170,6 +171,20 @@ export class Rooms {
           if (actor.id !== event.actorId && actor.id !== state.hostId) throw new ForbiddenException('只能撤销自己的操作，或由房主撤销');
           state.members.forEach(item => { item.score -= event.deltas[item.id]!; });
           event.undoneAt = new Date().toISOString();
+          break;
+        }
+        case 'restart': {
+          hostOnly();
+          if (state.status !== 'ended' || !state.startedAt || !state.endedAt) throw new ConflictException('请先结束本场，再开一局');
+          if (data.carry !== true && data.carry !== false) throw new BadRequestException('请选择重置积分或接着上一场');
+          state.rounds = [...(state.rounds ?? []), { id: state.roundId ?? state.startedAt, roomName: state.roomName,
+            initialScore: state.initialScore, startingScores: state.startingScores, rules: { ...state.rules },
+            members: state.members.map(({ id, name, score }) => ({ id, name, score })),
+            events: state.events, startedAt: state.startedAt, endedAt: state.endedAt }];
+          if (!data.carry) state.members.forEach(item => { item.score = state.initialScore; });
+          state.startingScores = Object.fromEntries(state.members.map(item => [item.id, item.score]));
+          state.roundId = requestId; state.events = []; state.status = 'playing';
+          state.startedAt = new Date().toISOString(); delete state.endedAt;
           break;
         }
         case 'end':

@@ -4,6 +4,7 @@ export interface LocalGame {
   id: string
   name: string
   initialScore: number
+  startingScores?: Record<string, number>
   rules: Rules
   members: Player[]
   events: ScoreEvent[]
@@ -37,6 +38,35 @@ export function readLocalGame(raw: string): LocalGame {
   const ids = new Set(g.members.map(p => p.id))
   if (ids.size !== g.members.length || g.members.some(p => typeof p.id !== 'string' || !Number.isSafeInteger(p.score))) throw new Error('本机比分无法读取。')
   if (g.events.some(e => !e || typeof e.id !== 'string' || !ids.has(e.actorId) || !(e.kind in DEFAULT_RULES) || !Number.isFinite(Date.parse(e.createdAt)) || !e.deltas || Object.entries(e.deltas).some(([id, d]) => !ids.has(id) || !Number.isSafeInteger(d)) || Object.values(e.deltas).reduce((a, b) => a + b, 0) !== 0)) throw new Error('本机记分记录无法读取。')
-  if (g.members.some(p => p.score !== g.initialScore + g.events.filter(e => !e.undoneAt).reduce((sum, e) => sum + (e.deltas[p.id] ?? 0), 0))) throw new Error('本机比分与记录不一致。')
+  if (g.members.some(p => p.score !== (g.startingScores?.[p.id] ?? g.initialScore) + g.events.filter(e => !e.undoneAt).reduce((sum, e) => sum + (e.deltas[p.id] ?? 0), 0))) throw new Error('本机比分与记录不一致。')
   return g
+}
+
+export const LOCAL_GAMES_KEY = 'zhuifen:local-games:v2'
+export interface LocalGames { currentId?: string; games: LocalGame[] }
+export function loadLocalGames(storage: Pick<Storage, 'getItem'>): LocalGames {
+  const raw = storage.getItem(LOCAL_GAMES_KEY)
+  if (raw) {
+    const store = JSON.parse(raw) as LocalGames
+    if (!Array.isArray(store.games) || new Set(store.games.map(g => g.id)).size !== store.games.length) throw new Error('本机历史记录无法读取。')
+    store.games.forEach(g => readLocalGame(JSON.stringify(g)))
+    return store
+  }
+  const legacy = storage.getItem(LOCAL_GAME_KEY)
+  if (!legacy) return { games: [] }
+  const game = readLocalGame(legacy)
+  return { currentId: game.id, games: [game] }
+}
+export function storeLocalGame(storage: Pick<Storage, 'getItem' | 'setItem'>, game: LocalGame): void {
+  const store = loadLocalGames(storage)
+  storage.setItem(LOCAL_GAMES_KEY, JSON.stringify({ currentId: game.id, games: [...store.games.filter(g => g.id !== game.id), game] }))
+}
+export function rematchLocal(game: LocalGame, carry: boolean): LocalGame {
+  if (!game.endedAt) throw new Error('请先结束本场，再开一局。')
+  const next = createLocalGame(game.members.map(p => p.name), game.name, game.initialScore, game.rules)
+  if (carry) {
+    next.members.forEach((p, i) => { p.score = game.members[i]!.score })
+    next.startingScores = Object.fromEntries(next.members.map(p => [p.id, p.score]))
+  }
+  return next
 }
