@@ -25,11 +25,20 @@ export interface PublicRoom extends Omit<RoomState, 'members' | 'rounds'> {
 }
 export interface Session { code: string; playerId: string; token: string; roomName?: string }
 
-// 输家发起给分：犯规自动给上家，其余类型给指定的赢家，每次只支付一份分值。
+// 没填昵称时按加入顺序使用的默认昵称。
+export const DEFAULT_NAMES = ['球友甲', '球友乙', '球友丙'] as const;
+// 取第一个还没人用的默认昵称；一桌最多三人，所以总能取到。
+export function defaultName(taken: string[]): string {
+  return DEFAULT_NAMES.find(name => !taken.includes(name)) ?? DEFAULT_NAMES[0];
+}
+
+// 输家发起给分，每次只支付一份分值，给指定的球友。
+// 三人局打球顺序会变，上下家不固定，所以包括犯规在内都要指定收分人；双人局犯规可以不指定，直接给对手。
 export function scoreDeltas(members: Player[], actorId: string, kind: ScoreKind, rules: Rules, recipientId?: string): Record<string, number> {
   const index = members.findIndex(member => member.id === actorId);
   if ((members.length !== 2 && members.length !== 3) || index < 0) throw new Error('需要两名或三名有效玩家');
-  const recipient = kind === 'foul' ? members[(index + members.length - 1) % members.length] : members.find(member => member.id === recipientId && member.id !== actorId);
+  const toOpponent = kind === 'foul' && members.length === 2 && recipientId === undefined;
+  const recipient = toOpponent ? members[1 - index] : members.find(member => member.id === recipientId && member.id !== actorId);
   if (!recipient) throw new Error('请选择其他球友收分');
   const value = rules[kind];
   if (!Number.isInteger(value) || value < 1 || value > 100) throw new Error('分值需要在 1–100 之间');

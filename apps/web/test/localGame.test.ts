@@ -3,10 +3,12 @@ import { test } from 'node:test'
 import { DEFAULT_RULES } from '@zhuifen/shared'
 import { createLocalGame, giveLocal, undoLocal, readLocalGame } from '../app/utils/localGame'
 
-test('三人犯规给上家，黄金9两位输家分别给分，撤销保持总分', () => {
+test('三人犯规给选中的球友，黄金9两位输家分别给分，撤销保持总分', () => {
   const original = createLocalGame(['甲', '乙', '丙'], '', 100, DEFAULT_RULES)
   const [a, b, c] = original.members.map(p => p.id)
-  const foul = giveLocal(original, a!, 'foul')
+  assert.throws(() => giveLocal(original, a!, 'foul'), /请选择其他球友/)
+  assert.deepEqual(giveLocal(original, a!, 'foul', b!).members.map(p => p.score), [99, 101, 100])
+  const foul = giveLocal(original, a!, 'foul', c!)
   assert.deepEqual(foul.members.map(p => p.score), [99, 100, 101])
   const restored = undoLocal(foul)
   const first = giveLocal(restored, a!, 'golden9', b!)
@@ -27,8 +29,21 @@ test('双人允许负分、自定义规则；结束后不能记分或撤销', ()
   assert.throws(() => giveLocal(game, game.members[0]!.id, 'normal', game.members[0]!.id))
 })
 
+test('昵称可以不填：依次叫球友甲、乙、丙，跳过已经填了的；重开时沿用', async () => {
+  const names = (list: string[]) => createLocalGame(list, '', 100, DEFAULT_RULES).members.map(p => p.name)
+  assert.deepEqual(names(['', '', '']), ['球友甲', '球友乙', '球友丙'])
+  assert.deepEqual(names(['', ' ']), ['球友甲', '球友乙'])
+  assert.deepEqual(names(['', '老王', '']), ['球友甲', '老王', '球友乙'])
+  assert.deepEqual(names(['', '球友甲', '']), ['球友乙', '球友甲', '球友丙'])
+  const { rematchLocal } = await import('../app/utils/localGame')
+  const game = { ...createLocalGame(['', ''], '', 100, DEFAULT_RULES), endedAt: new Date().toISOString() }
+  assert.deepEqual(rematchLocal(game, false).members.map(p => p.name), ['球友甲', '球友乙'])
+  assert.deepEqual(readLocalGame(JSON.stringify(game)), game)
+})
+
 test('拒绝重复昵称、非法分值和损坏的本机记录', () => {
   assert.throws(() => createLocalGame(['甲', ' 甲 '], '', 100, DEFAULT_RULES))
+  assert.throws(() => createLocalGame(['甲', '名'.repeat(13)], '', 100, DEFAULT_RULES))
   assert.throws(() => createLocalGame(['甲', '乙'], '', 0, DEFAULT_RULES))
   assert.throws(() => createLocalGame(['甲', '乙'], '', 100, { ...DEFAULT_RULES, golden9: 1.5 }))
   assert.throws(() => readLocalGame('{}'))

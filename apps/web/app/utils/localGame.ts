@@ -1,4 +1,4 @@
-import { DEFAULT_RULES, LABELS, scoreDeltas, type Player, type Rules, type ScoreEvent, type ScoreKind } from '@zhuifen/shared'
+import { DEFAULT_RULES, defaultName, LABELS, scoreDeltas, type Player, type Rules, type ScoreEvent, type ScoreKind } from '@zhuifen/shared'
 import { randomId } from './random'
 
 export interface LocalGame {
@@ -14,8 +14,11 @@ export interface LocalGame {
 }
 export const LOCAL_GAME_KEY = 'zhuifen:local-game:v1'
 export function createLocalGame(names: string[], name: string, initialScore: number, rules: Rules): LocalGame {
-  const cleaned = names.map(n => n.trim())
-  if (![2, 3].includes(cleaned.length) || cleaned.some(n => !n || n.length > 12) || new Set(cleaned).size !== cleaned.length) throw new Error('请填写不同的球友昵称，每个最多 12 个字。')
+  const typed = names.map(n => n.trim())
+  // 没填昵称的座位依次用球友甲、乙、丙，跳过已经被别人填了的。
+  const cleaned = [...typed]
+  cleaned.forEach((n, i) => { if (!n) cleaned[i] = defaultName(cleaned) })
+  if (![2, 3].includes(cleaned.length) || cleaned.some(n => n.length > 12) || new Set(cleaned).size !== cleaned.length) throw new Error('球友昵称不能重复，每个最多 12 个字。')
   if (!Number.isInteger(initialScore) || initialScore < 1 || initialScore > 10000) throw new Error('初始积分需要在 1–10000 之间。')
   if (Object.keys(DEFAULT_RULES).some(k => !Number.isInteger(rules[k as ScoreKind]) || rules[k as ScoreKind] < 1 || rules[k as ScoreKind] > 100)) throw new Error('各项分值需要在 1–100 之间。')
   return { id: randomId(), name: name.trim().slice(0, 24), initialScore, rules: { ...rules }, members: cleaned.map(name => ({ id: randomId(), name, score: initialScore })), events: [], startedAt: new Date().toISOString() }

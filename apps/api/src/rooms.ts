@@ -2,15 +2,17 @@ import { BadRequestException, ConflictException, ForbiddenException, Inject, Inj
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { Database } from './database';
 import type { PoolClient } from 'pg';
-import { DEFAULT_RULES, LABELS, Member, PlayerCount, RoomState, RoundRecord, Rules, ScoreKind, scoreDeltas } from '@zhuifen/shared';
+import { DEFAULT_RULES, defaultName, LABELS, Member, PlayerCount, RoomState, RoundRecord, Rules, ScoreKind, scoreDeltas } from '@zhuifen/shared';
 
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new BadRequestException('请求格式不正确');
   return value as Record<string, unknown>;
 }
-function name(value: unknown): string {
-  if (typeof value !== 'string' || !value.trim() || value.trim().length > 12) throw new BadRequestException('昵称需要 1–12 个字');
-  return value.trim();
+// 昵称可以不填（不传或留空），这时返回 undefined，由调用方按房间里已有的人起一个默认昵称。
+function name(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.trim().length > 12) throw new BadRequestException('昵称最多 12 个字');
+  return value.trim() || undefined;
 }
 function roomName(value: unknown): string | undefined {
   if (value === undefined) return undefined;
@@ -57,9 +59,9 @@ function playerCount(value: unknown): PlayerCount {
 function restoreState(value: RoomState): RoomState {
   return { ...value, playerCount: value.playerCount ?? 3 };
 }
-function member(nickname: unknown): { member: Member; token: string } {
+function member(nickname: string): { member: Member; token: string } {
   const token = randomBytes(32).toString('hex');
-  return { member: { id: randomUUID(), name: name(nickname), tokenHash: hash(token), score: 0 }, token };
+  return { member: { id: randomUUID(), name: nickname, tokenHash: hash(token), score: 0 }, token };
 }
 export function authenticate(state: RoomState, token: unknown): Member {
   if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw new ForbiddenException({ message: '请重新加入房间', code: ACCESS_DENIED });
@@ -110,7 +112,7 @@ export class Rooms {
   }
   async create(body: unknown) {
     const data = object(body);
-    const owner = member(data.name);
+    const owner = member(name(data.name) ?? defaultName([]));
     const config = settings(data);
     const capacity = playerCount(data.playerCount);
     const title = roomName(data.roomName);
@@ -127,7 +129,8 @@ export class Rooms {
   async join(code: string, body: unknown) {
     this.validateCode(code);
     const data = object(body);
-    const newcomer = member(data.name);
+    const nickname = name(data.name);
+    const newcomer = member(nickname ?? '');
     const requestId = uuid(data.requestId);
     // 防止网络重试占用第二个座位：客户端为这次加入保留同一个随机 token。
     if (typeof data.token !== 'string' || !/^[a-f0-9]{64}$/.test(data.token)) throw new BadRequestException('加入凭证不正确');
@@ -139,9 +142,12 @@ export class Rooms {
       if (state.status === 'closed') throw new ConflictException('房间已关闭，无法加入');
       if (state.status !== 'waiting') throw new ConflictException('比赛已开始，请使用原来的设备恢复');
       if (state.members.length >= state.playerCount) throw new ConflictException(`${state.playerCount === 2 ? '双人' : '三人'}房间已满`);
-      if (state.members.some(item => item.name === newcomer.member.name)) throw new ConflictException('这个昵称已被使用，请换一个');
+      if (state.members.some(item => item.name === nickname)) throw new ConflictException('这个昵称已被使用，请换一个');
+      newcomer.member.name = nickname ?? defaultName(state.members.map(item => item.name));
       newcomer.member.score = state.initialScore;
       state.members.push(newcomer.member);
+      // 人到齐就直接开局，不用房主再点一次开始。
+      if (state.members.length === state.playerCount) { state.status = 'playing'; state.startedAt = new Date().toISOString(); }
       return true;
     });
     return { state, session: { code, playerId: newcomer.member.id, token: newcomer.token }, requestId };
@@ -184,6 +190,7 @@ export class Rooms {
           if (state.status !== 'waiting') throw new ConflictException('只能关闭等待开局的房间，比赛开始后请结束本场');
           state.status = 'closed'; state.closedAt = new Date().toISOString();
           break;
+        // 人到齐会自动开局；这个命令留给升级前就已经坐满、还在等房主开局的房间。
         case 'start':
           hostOnly();
           if (state.status !== 'waiting' || state.members.length !== state.playerCount) throw new ConflictException(`需要 ${state.playerCount} 人加入后再开始`);
@@ -206,7 +213,9 @@ export class Rooms {
           if (state.events.length >= MAX_EVENTS_PER_ROUND) throw new ConflictException('这一局的记分次数已达上限，请结束本场后再开一局');
           if (typeof data.kind !== 'string' || !Object.hasOwn(DEFAULT_RULES, data.kind)) throw new BadRequestException('计分类型不正确');
           const kind = data.kind as ScoreKind;
-          if (kind !== 'foul' && (typeof data.recipientId !== 'string' || data.recipientId === actor.id || !state.members.some(item => item.id === data.recipientId))) throw new BadRequestException('请选择其他球友收分');
+          // 双人局犯规可以不带收分人（直接给对手）；三人局所有类型都要指定收分人。
+          const toOpponent = kind === 'foul' && state.members.length === 2 && data.recipientId === undefined;
+          if (!toOpponent && (typeof data.recipientId !== 'string' || data.recipientId === actor.id || !state.members.some(item => item.id === data.recipientId))) throw new BadRequestException('请选择其他球友收分');
           const deltas = scoreDeltas(state.members, actor.id, kind, state.rules, data.recipientId as string | undefined);
           state.members.forEach(item => { item.score += deltas[item.id]!; });
           state.events.push({ id: requestId, kind, actorId: actor.id, label: kind === 'foul' ? LABELS[kind] : `给分（${LABELS[kind]}）`, deltas, createdAt: new Date().toISOString() });

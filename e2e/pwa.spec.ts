@@ -37,9 +37,7 @@ test('没网时：打开过和没打开过的页面都能显示，单机记分�
 
   await context.setOffline(true)
   await page.goto('/local?new=1')
-  await page.getByPlaceholder('球友 1 的昵称').fill('甲')
-  await page.getByPlaceholder('球友 2 的昵称').fill('乙')
-  await page.getByPlaceholder('球友 3 的昵称').fill('丙')
+  // 昵称不用填，直接开局。
   await page.getByRole('button', { name: '开始单机记分' }).click()
   await expect(page.locator('.score-number')).toHaveText(['100分', '100分', '100分'])
   await page.goto('/history')

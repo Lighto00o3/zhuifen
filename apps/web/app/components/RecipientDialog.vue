@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Player } from '@zhuifen/shared'
 
-// 三人局普胜、小金等由输家选择收分的球友。
+// 三人局每一笔（包括犯规）都由给分的人选择收分的球友。
 defineProps<{ label: string; value: number; players: Player[]; disabled: boolean }>()
 const emit = defineEmits<{ pick: [id: string]; close: [] }>()
 </script>

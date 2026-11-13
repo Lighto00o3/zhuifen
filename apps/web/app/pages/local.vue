@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DEFAULT_RULES, LABELS, type Rules, type ScoreKind } from '@zhuifen/shared'
+import { DEFAULT_NAMES, DEFAULT_RULES, LABELS, type Rules, type ScoreKind } from '@zhuifen/shared'
 import { createLocalGame, giveLocal, undoLocal, loadLocalGames, storeLocalGame, rematchLocal, LOCAL_GAME_KEY, LOCAL_GAMES_KEY, type LocalGame } from '../utils/localGame'
 import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { clockTime, formatElapsed } from '../utils/format'
@@ -55,7 +55,7 @@ async function open(next: NonNullable<typeof action.value>) {
   dialog.value?.showModal()
 }
 function choose(k: ScoreKind) { kind.value = k; void open('give') }
-function give(recipientId?: string) {
+function give(recipientId: string) {
   if (!game.value) return
   try {
     const next = giveLocal(game.value, payer.value, kind.value, recipientId)
@@ -110,10 +110,10 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
       <p v-if="error && !action" class="error" role="alert">{{ error }}</p>
       <p v-if="!ready" class="muted">正在读取本机记录…</p>
       <section v-else-if="!game && !historical" class="entry-card local-setup">
-        <div class="card-heading"><h1>一台手机，<br />也能开一桌。</h1><p>按出杆顺序填写昵称，记分时切换给分的人。</p></div>
+        <div class="card-heading"><h1>一台手机，<br />也能开一桌。</h1><p>昵称可以不填，记分时切换给分的人。</p></div>
         <form @submit.prevent="start">
           <div class="field"><span>追分人数</span><div class="mode-picker"><button v-for="n in ([2, 3] as const)" :key="n" type="button" :class="{ active: count === n }" :aria-pressed="count === n" @click="count = n">{{ n === 2 ? '双人追分' : '三人追分' }}</button></div></div>
-          <label v-for="n in count" :key="n" class="field">第 {{ n }} 位球友<input v-model="names[n - 1]" :placeholder="`球友 ${n} 的昵称`" maxlength="12" required /></label>
+          <label v-for="n in count" :key="n" class="field">第 {{ n }} 位球友（选填）<input v-model="names[n - 1]" :placeholder="`不填就叫「${DEFAULT_NAMES[n - 1]}」`" maxlength="12" /></label>
           <label class="field">本场名称（选填）<input v-model="title" placeholder="例如：周末练球" maxlength="24" /></label>
           <label class="field">每人初始积分<input v-model.number="initial" type="number" min="1" max="10000" required /></label>
           <div class="settings-grid"><label v-for="(label, k) in LABELS" :key="k" class="field">{{ label }}{{ k === 'dajin' || k === 'golden9' ? '（每位输家）' : '' }}<input v-model.number="rules[k]" type="number" min="1" max="100" required /></label></div>
@@ -133,7 +133,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
               <div class="section-label"><h2>谁来给分？</h2><span>先选输家，再点牌</span></div>
               <div class="local-payers" role="group" aria-label="选择给分的人"><button v-for="p in game.members" :key="p.id" :class="{ active: payer === p.id }" :aria-pressed="payer === p.id" @click="payer = p.id">{{ p.name }}</button></div>
               <div class="score-actions"><button v-for="(label, k, index) in LABELS" :key="k" :class="['score-action', k]" :style="{ '--card-tilt': `${(index - 2) * 3}deg` }" :aria-label="`${selected?.name}给${label} ${game.rules[k]} 分`" @click="choose(k)"><span class="score-card-stack" aria-hidden="true"><span v-for="(card, i) in pointCards(game.rules[k]).slice(0, 3)" :key="i" class="score-card-face" :style="{ '--stack-offset': `${i * 3}px`, zIndex: 3 - i }"><PlayingCard :value="card.value" :face="card.rank" :suit="CARD_SUITS[k]" /></span></span><span class="score-card-label">{{ label }}</span><span class="score-card-amount">−{{ game.rules[k] }} 分</span></button></div>
-              <p class="card-rule-note">{{ game.members.length === 3 ? `犯规给上家；大金每位输家给 ${game.rules.dajin} 分，黄金9每位输家给 ${game.rules.golden9} 分，请分别记两笔。` : '犯规给对手；其他牌按赢家的得分支付一份。' }}</p>
+              <p class="card-rule-note">{{ game.members.length === 3 ? `每笔都要选收分的球友；大金每位输家给 ${game.rules.dajin} 分，黄金9每位输家给 ${game.rules.golden9} 分，请分别记两笔。` : '犯规给对手；其他牌按赢家的得分支付一份。' }}</p>
               <div class="action-footer"><span>当前给分：{{ selected?.name }}</span><button class="text-button" :disabled="!last" @click="open('undo')">↶ 撤销上一笔</button></div>
             </section>
             <section v-else class="finished-panel"><h2>本场比分已保存</h2><p>比分与记录已收入历史对局。</p><button v-if="!historical" class="primary" @click="carry = false; open('new')">再开一局</button><NuxtLink class="secondary" to="/history">历史对局</NuxtLink><ShareScore :game="game" /><NuxtLink v-if="!historical" class="text-button" to="/local?new=1">换球友，开新桌</NuxtLink></section>
@@ -148,7 +148,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
       <div v-if="action && game" class="local-dialog-content">
         <button class="close-modal" aria-label="关闭弹窗" @click="close">×</button>
         <h2 id="local-dialog-title">{{ action === 'give' ? `${selected?.name}给${LABELS[kind]}` : action === 'undo' ? '撤销上一笔记分？' : action === 'end' ? '结束这场追分？' : '开始新一局？' }}</h2>
-        <template v-if="action === 'give'"><p>扣 {{ selected?.name }} {{ game.rules[kind] }} 分，给收分的球友。</p><div class="recipient-actions"><button v-if="kind === 'foul'" class="primary full" @click="give()">给 {{ game.members[(game.members.findIndex(p => p.id === payer) + game.members.length - 1) % game.members.length]?.name }} {{ game.rules[kind] }} 分</button><template v-else><button v-for="p in recipients" :key="p.id" class="primary full" @click="give(p.id)">给 {{ p.name }} {{ game.rules[kind] }} 分</button></template></div></template>
+        <template v-if="action === 'give'"><p>扣 {{ selected?.name }} {{ game.rules[kind] }} 分，给收分的球友。</p><div class="recipient-actions"><button v-for="p in recipients" :key="p.id" class="primary full" @click="give(p.id)">给 {{ p.name }} {{ game.rules[kind] }} 分</button></div></template>
         <template v-else><p>{{ action === 'undo' ? '还原上一笔给分，记录会标记为已撤销。' : action === 'end' ? '结束后可以查看比分和记录，不能继续给分。' : '沿用球友、座位和规则，上一场记录会保留。' }}</p><div v-if="action === 'new'" class="rematch-options"><button class="secondary full" :aria-pressed="!carry" @click="carry = false">重置积分 · 每人 {{ game.initialScore }} 分</button><button class="secondary full" :aria-pressed="carry" @click="carry = true">接着上一场的积分</button></div><div class="confirm-actions"><button class="secondary" @click="close">再想想</button><button class="primary" @click="confirm">{{ action === 'undo' ? '确认撤销' : action === 'end' ? '确认结束' : '开始下一局' }}</button></div></template>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
       </div>

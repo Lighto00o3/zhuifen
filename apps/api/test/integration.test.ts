@@ -49,7 +49,7 @@ test('三人真实数据库与实时同步：鉴权、并发、去重、撤销�
     socket.on('room:state', listener);
   });
   try {
-    await request('/rooms', { name: '', initialScore: 100 }, undefined, 400);
+    await request('/rooms', { name: '名'.repeat(13), initialScore: 100 }, undefined, 400);
     for (const roomName of [null, 123, '名'.repeat(25)]) await request('/rooms', { name: '甲', roomName }, undefined, 400);
     const created = await request('/rooms', { name: '甲', initialScore: 100 });
     code = created.room.code;
@@ -68,12 +68,10 @@ test('三人真实数据库与实时同步：鉴权、并发、去重、撤销�
     const retryJoin = await request(`/rooms/${code}/join`, joinBody);
     assert.equal(retryJoin.session.playerId, b.playerId);
     assert.equal(retryJoin.room.members.length, 2);
-    const joinedC = await request(`/rooms/${code}/join`, { name: '丙', token: randomBytes(32).toString('hex'), requestId: randomUUID() });
-    const c: Session = joinedC.session;
-    await request(`/rooms/${code}/join`, { name: '丁', token: randomBytes(32).toString('hex'), requestId: randomUUID() }, undefined, 409);
     await cmd(b, { type: 'start' }, 403);
-    const clients = await Promise.all([a, b, c].map(subscribe));
-    const config = { type: 'configure', rules: DEFAULT_RULES, initialScore: 100, order: [a.playerId, b.playerId, c.playerId] };
+    // 房间设置只能在人到齐之前改：第三个人一加入就自动开局了。
+    const clients = await Promise.all([a, b].map(subscribe));
+    const config = { type: 'configure', rules: DEFAULT_RULES, initialScore: 100, order: [a.playerId, b.playerId] };
     await cmd(b, { ...config, roomName: '非房主改名' }, 403);
     await cmd(a, { ...config, roomName: '名'.repeat(25) }, 400);
     const nameBroadcast = updated(clients[1]!.socket, clients[1]!.state.version + 1);
@@ -82,17 +80,31 @@ test('三人真实数据库与实时同步：鉴权、并发、去重、撤销�
     assert.equal((await nameBroadcast).roomName, '周末球友局');
     assert.equal((await cmd(a, config)).roomName, '周末球友局');
     assert.equal((await cmd(a, { ...config, roomName: '   ' })).roomName, undefined);
-    await cmd(a, { ...config, roomName: '周末球友局' });
-    const started = await cmd(a, { type: 'start' });
-    await cmd(a, { ...config, roomName: '开局后改名' }, 409);
+    const waiting = await cmd(a, { ...config, roomName: '周末球友局' });
+    assert.equal(waiting.status, 'waiting');
+    // 第三个人加入后人到齐，自动开局，已经在房间里的人实时收到。
+    const autoStart = updated(clients[0]!.socket, waiting.version + 1);
+    const joinedC = await request(`/rooms/${code}/join`, { name: '丙', token: randomBytes(32).toString('hex'), requestId: randomUUID() });
+    const c: Session = joinedC.session;
+    const started = joinedC.room;
+    assert.equal(started.status, 'playing');
+    assert.ok(started.startedAt);
+    assert.equal((await autoStart).status, 'playing');
+    await request(`/rooms/${code}/join`, { name: '丁', token: randomBytes(32).toString('hex'), requestId: randomUUID() }, undefined, 409);
+    await cmd(a, { type: 'start' }, 409);
+    clients.push(await subscribe(c));
+    await cmd(a, { ...config, order: [a.playerId, b.playerId, c.playerId], roomName: '开局后改名' }, 409);
+    // 三人局犯规也要指定收分人：不带、给自己、给房间外的人都会被拒绝。
+    for (const recipientId of [undefined, b.playerId, randomUUID()]) await cmd(b, { type: 'score', kind: 'foul', ...(recipientId ? { recipientId } : {}) }, 400);
+    assert.equal((await request(`/rooms/${code}`, undefined, a, 200)).version, started.version);
     const broadcasts = clients.map(client => updated(client.socket, started.version + 1));
     const scoreId = randomUUID();
-    const scored = await cmd(b, { type: 'score', kind: 'foul', requestId: scoreId });
+    const scored = await cmd(b, { type: 'score', kind: 'foul', recipientId: a.playerId, requestId: scoreId });
     for (const state of await Promise.all(broadcasts)) {
       assert.deepEqual(state.members.map(p => p.score), [101, 99, 100]);
       assert.equal(JSON.stringify(state).includes('tokenHash'), false);
     }
-    const duplicate = await cmd(b, { type: 'score', kind: 'foul', requestId: scoreId });
+    const duplicate = await cmd(b, { type: 'score', kind: 'foul', recipientId: a.playerId, requestId: scoreId });
     assert.equal(duplicate.version, scored.version);
     assert.equal(duplicate.events.length, 1);
     await cmd(b, { type: 'score', kind: 'dajin', requestId: scoreId }, 409);
@@ -102,15 +114,16 @@ test('三人真实数据库与实时同步：鉴权、并发、去重、撤销�
     assert.deepEqual(undone.members.map((p: any) => p.score), [100, 100, 100]);
     await cmd(b, { type: 'undo', eventId: scoreId, requestId: undoId });
     const concurrentIds = [randomUUID(), randomUUID()];
-    await Promise.all([cmd(b, { type: 'score', kind: 'foul', requestId: concurrentIds[0] }), cmd(c, { type: 'score', kind: 'normal', recipientId: b.playerId, requestId: concurrentIds[1] })]);
+    // 乙犯规这次给丙（不是排在他前面的甲），同时丙给乙普胜。
+    await Promise.all([cmd(b, { type: 'score', kind: 'foul', recipientId: c.playerId, requestId: concurrentIds[0] }), cmd(c, { type: 'score', kind: 'normal', recipientId: b.playerId, requestId: concurrentIds[1] })]);
     const concurrent = await request(`/rooms/${code}`, undefined, a, 200);
-    assert.deepEqual(concurrent.members.map((p: any) => p.score), [101, 103, 96]);
+    assert.deepEqual(concurrent.members.map((p: any) => p.score), [100, 103, 97]);
     assert.equal(concurrent.members.reduce((sum: number, p: any) => sum + p.score, 0), 300);
     await cmd(a, { type: 'undo', eventId: scoreId }, 409);
     clients[2]!.socket.disconnect();
     await cmd(b, { type: 'score', kind: 'dajin', recipientId: a.playerId });
     const reconnected = await subscribe(c);
-    assert.deepEqual(reconnected.state.members.map(p => p.score), [111, 93, 96]);
+    assert.deepEqual(reconnected.state.members.map(p => p.score), [110, 93, 97]);
     await cmd(a, { type: 'end' });
     await cmd(b, { type: 'score', kind: 'foul' }, 409);
     sockets.forEach(socket => socket.disconnect());
@@ -120,7 +133,7 @@ test('三人真实数据库与实时同步：鉴权、并发、去重、撤销�
     const restored = await request(`/rooms/${code}`, undefined, a, 200);
     assert.equal(restored.status, 'ended');
     assert.equal(restored.roomName, '周末球友局');
-    assert.deepEqual(restored.members.map((p: any) => p.score), [111, 93, 96]);
+    assert.deepEqual(restored.members.map((p: any) => p.score), [110, 93, 97]);
     assert.equal(restored.events.length, 4);
   } finally {
     sockets.forEach(socket => socket.disconnect());
@@ -154,14 +167,20 @@ test('双人房间：人数校验、满员限制、两人开局、实时转分�
     assert.equal(created.room.playerCount, 2);
     assert.equal(created.room.roomName, '双人练球');
     await command(a, { type: 'start' }, 409);
+    await command(a, { type: 'configure', initialScore: 100, rules: DEFAULT_RULES, order: [a.playerId] });
     const join = { name: '乙', token: randomBytes(32).toString('hex'), requestId: randomUUID() };
-    const b: Session = (await request(`/rooms/${code}/join`, join)).session;
+    // 第二个人加入后人到齐，自动开局；重试加入不会重复开局。
+    const joined = await request(`/rooms/${code}/join`, join);
+    const b: Session = joined.session;
+    assert.equal(joined.room.status, 'playing');
     const retry = await request(`/rooms/${code}/join`, join);
+    assert.equal(retry.room.version, joined.room.version);
+    assert.equal(retry.room.startedAt, joined.room.startedAt);
     assert.equal(retry.room.members.length, 2);
     assert.equal(retry.room.roomName, '双人练球');
     assert.equal(retry.session.playerId, b.playerId);
     await request(`/rooms/${code}/join`, { name: '丙', token: randomBytes(32).toString('hex'), requestId: randomUUID() }, undefined, 409);
-    await command(a, { type: 'configure', initialScore: 100, rules: DEFAULT_RULES, order: [a.playerId, b.playerId] });
+    await command(a, { type: 'configure', initialScore: 100, rules: DEFAULT_RULES, order: [a.playerId, b.playerId] }, 409);
     for (const session of [a, b]) {
       const socket = io(origin, { transports: ['websocket'], forceNew: true });
       sockets.push(socket);
@@ -170,7 +189,8 @@ test('双人房间：人数校验、满员限制、两人开局、实时转分�
       assert.equal(subscribed.ok, true);
       assert.equal(subscribed.room.playerCount, 2);
     }
-    const started = await command(a, { type: 'start' });
+    const started = joined.room;
+    await command(a, { type: 'start' }, 409);
     await command(a, { type: 'close' }, 409);
     const updates = sockets.map(socket => new Promise<PublicRoom>((resolve, reject) => {
       const timeout = setTimeout(() => { socket.off('room:state', listener); reject(new Error('双人实时同步超时')); }, 5000);
@@ -204,6 +224,59 @@ test('双人房间：人数校验、满员限制、两人开局、实时转分�
     if (code) await app.get(Database).pool.query('DELETE FROM rooms WHERE code=$1', [code]);
     await app.close();
   }
+});
+
+test('昵称选填与自动开局：不填昵称依次叫球友甲、乙、丙；人到齐自动开局；升级前坐满的房间仍可由房主开始', { timeout: 60000 }, async () => {
+  const app = await createApp(); await app.listen(0, '127.0.0.1');
+  const origin = await app.getUrl(); const codes: string[] = [];
+  async function req(path: string, data?: unknown, session?: Session, status = 201): Promise<any> {
+    const response = await fetch(`${origin}/api${path}`, { method: data === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.token}` } : {}) }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const result = await response.json(); assert.equal(response.status, status, JSON.stringify(result)); return result;
+  }
+  const join = (code: string, name?: unknown, status = 201) => req(`/rooms/${code}/join`, { ...(name === undefined ? {} : { name }), token: randomBytes(32).toString('hex'), requestId: randomUUID() }, undefined, status);
+  const names = (room: PublicRoom) => room.members.map(member => member.name);
+  try {
+    // 昵称可以不填，但填了就要是 12 个字以内的文字。
+    for (const name of [123, null]) await req('/rooms', { name }, undefined, 400);
+    // 三个人都不填：不传昵称、传空串、只有空格，效果一样。
+    const created = await req('/rooms', {});
+    const a: Session = created.session; codes.push(a.code);
+    assert.deepEqual(names(created.room), ['球友甲']);
+    const second = await join(a.code, '');
+    assert.deepEqual(names(second.room), ['球友甲', '球友乙']);
+    assert.equal(second.room.status, 'waiting');
+    assert.equal(second.room.startedAt, undefined);
+    // 同一个凭证重试加入，还是同一个人、同一个昵称，不会再占一个座位。
+    const retryBody = { name: '   ', token: randomBytes(32).toString('hex'), requestId: randomUUID() };
+    const third = await req(`/rooms/${a.code}/join`, retryBody);
+    assert.deepEqual(names(third.room), ['球友甲', '球友乙', '球友丙']);
+    assert.equal(third.room.status, 'playing');
+    assert.ok(third.room.startedAt);
+    const again = await req(`/rooms/${a.code}/join`, retryBody);
+    assert.equal(again.session.playerId, third.session.playerId);
+    assert.equal(again.room.version, third.room.version);
+    await join(a.code, undefined, 409);
+    // 开局后可以直接记分，记录里显示的是默认昵称对应的人。
+    const scored = await req(`/rooms/${a.code}/commands`, { type: 'score', kind: 'foul', recipientId: a.playerId, requestId: randomUUID() }, third.session);
+    assert.deepEqual(scored.members.map((member: any) => member.score), [101, 100, 99]);
+
+    // 有人填了昵称、有人没填：默认昵称跳过已经被用掉的；手动填一个重复的昵称仍然被拒绝。
+    const mixed = await req('/rooms', { name: '球友乙', playerCount: 3 });
+    codes.push(mixed.session.code);
+    assert.deepEqual(names((await join(mixed.session.code)).room), ['球友乙', '球友甲']);
+    await join(mixed.session.code, '球友甲', 409);
+    await join(mixed.session.code, '名'.repeat(13), 400);
+    assert.deepEqual(names((await join(mixed.session.code)).room), ['球友乙', '球友甲', '球友丙']);
+
+    // 升级前创建、已经坐满但还没开局的房间：不会卡住，房主仍然可以手动开始。
+    const legacy = await req('/rooms', { name: '甲', playerCount: 2 });
+    const host: Session = legacy.session; codes.push(host.code);
+    const guest = await join(host.code, '乙');
+    await app.get(Database).pool.query("UPDATE rooms SET state=jsonb_set(state,'{status}','\"waiting\"') - 'startedAt' WHERE code=$1", [host.code]);
+    assert.equal((await req(`/rooms/${host.code}`, undefined, host, 200)).status, 'waiting');
+    await req(`/rooms/${host.code}/commands`, { type: 'start', requestId: randomUUID() }, guest.session, 403);
+    assert.equal((await req(`/rooms/${host.code}/commands`, { type: 'start', requestId: randomUUID() }, host)).status, 'playing');
+  } finally { await app.get(Database).pool.query('DELETE FROM rooms WHERE code = ANY($1)', [codes]); await app.close(); }
 });
 
 test('房主关闭未开局房间：实时通知、权限、重试、拒绝加入与重启恢复', { timeout: 60000 }, async () => {
@@ -287,7 +360,6 @@ test('同桌重开：权限、继承与重置、历史快照、重试去重以�
     const a: Session = created.session; code = a.code;
     const b: Session = (await req(`/rooms/${code}/join`, { name: '乙', token: randomBytes(32).toString('hex'), requestId: randomUUID() })).session;
     await cmd(a, { type: 'restart', carry: false }, 409);
-    await cmd(a, { type: 'start' });
     await cmd(b, { type: 'score', kind: 'normal', recipientId: a.playerId });
     const ended = await cmd(a, { type: 'end' });
     await cmd(b, { type: 'restart', carry: true }, 403);
@@ -399,10 +471,11 @@ test('命令校验与限流：请求体上限、字段白名单、每局与每�
     assert.equal((await send('/rooms', { name: '甲', rules: { ...DEFAULT_RULES, extra: 1 } }, '198.51.100.1')).status, 400);
     const created = await send('/rooms', { name: '甲', playerCount: 2 }, '198.51.100.1');
     const a: Session = created.body.session; code = a.code;
-    const b: Session = (await send(`/rooms/${code}/join`, { name: '乙', token: randomBytes(32).toString('hex'), requestId: randomUUID() }, '198.51.100.1')).body.session;
-    const order = [a.playerId, b.playerId];
+    const order = [a.playerId];
     assert.equal((await cmd(a, { type: 'configure', initialScore: 100, rules: { ...DEFAULT_RULES, extra: 1 }, order })).status, 400);
-    assert.equal((await cmd(a, { type: 'start' })).status, 201);
+    assert.equal((await cmd(a, { type: 'configure', initialScore: 100, rules: DEFAULT_RULES, order })).status, 201);
+    // 第二个人加入后自动开局。
+    const b: Session = (await send(`/rooms/${code}/join`, { name: '乙', token: randomBytes(32).toString('hex'), requestId: randomUUID() }, '198.51.100.1')).body.session;
 
     // 请求体超过 16 KB 直接拒绝；多余字段、属于其他命令的字段、过长的字段都不会写进命令记录。
     const large = await cmd(b, { type: 'score', kind: 'foul', junk: randomBytes(10_000).toString('hex') });
@@ -413,7 +486,7 @@ test('命令校验与限流：请求体上限、字段白名单、每局与每�
     }
     assert.equal((await cmd(b, { type: 'constructor' })).status, 400);
     const stored = await db.query('SELECT max(octet_length(payload::text)) AS size, count(*)::int AS n FROM room_commands WHERE room_code=$1', [code]);
-    // 只有通过校验的 start 被记录，被拒绝的命令一条都没写进去。
+    // 只有通过校验的 configure 被记录，被拒绝的命令一条都没写进去。
     assert.ok(stored.rows[0].size < 1024); assert.equal(stored.rows[0].n, 1);
 
     // 同一 IP 每分钟最多 120 条命令，换一个 IP 不受影响。

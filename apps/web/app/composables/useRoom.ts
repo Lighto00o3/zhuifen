@@ -29,13 +29,12 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
   const isHost = computed(() => room.value?.hostId === session.value?.playerId)
   const lastEvent = computed(() => room.value?.events.findLast(e => !e.undoneAt))
   const canUndo = computed(() => !!lastEvent.value && (isHost.value || lastEvent.value.actorId === session.value?.playerId))
-  const neighbour = (step: number) => computed(() => {
+  // 排在自己前一位的球友；双人局里就是对手。
+  const previous = computed(() => {
     const members = room.value?.members ?? []
     const index = members.findIndex(p => p.id === session.value?.playerId)
-    return members.length > 1 ? members[(index + step + members.length) % members.length] : undefined
+    return members.length > 1 ? members[(index - 1 + members.length) % members.length] : undefined
   })
-  const previous = neighbour(-1)
-  const next = neighbour(1)
   const activeEvents = computed(() => room.value?.events.filter(e => !e.undoneAt) ?? [])
   const capacity = computed(() => room.value?.playerCount ?? 3)
 
@@ -148,6 +147,6 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
   }
   onUnmounted(disconnect)
 
-  return { room, session, saved, busy, connected, error, pending, me, isHost, lastEvent, canUndo, previous, next, activeEvents, capacity,
+  return { room, session, saved, busy, connected, error, pending, me, isHost, lastEvent, canUndo, previous, activeEvents, capacity,
     api, loadSaved, refreshRecent, enter, resume, disconnect, connect, command, retry }
 }
