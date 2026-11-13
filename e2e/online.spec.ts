@@ -20,15 +20,19 @@ test('联机双人：创建房间、扫码加入后自动开局、实时记分�
   await expect(host.getByText('1 / 2 人已加入')).toBeVisible()
   await expect(host.getByText('两人到齐后自动开始追分')).toBeVisible()
 
-  // 邀请弹窗：二维码和邀请链接；Esc 关闭后焦点回到原来的按钮。
-  const inviteButton = host.getByRole('button', { name: /扫码邀请/ })
-  await inviteButton.click()
-  const dialog = host.getByRole('dialog', { name: '扫码，加入这一桌' })
-  await expect(dialog.getByRole('img', { name: '加入房间的二维码' })).toBeVisible()
-  const link = await dialog.getByLabel('邀请链接').inputValue()
+  // 等人的时候页面上直接显示二维码和邀请链接，不用再点按钮。
+  const invite = host.getByRole('region', { name: '扫码，加入这一桌' })
+  await expect(invite.getByRole('img', { name: '加入房间的二维码' })).toBeVisible()
+  await expect(invite.getByLabel('房间号')).toHaveText(/^\d{6}$/)
+  const link = await invite.getByLabel('邀请链接').inputValue()
+  // 房主改分值的弹窗：Esc 关闭后焦点回到原来的按钮。
+  const settingsButton = host.getByRole('button', { name: /分值与初始积分/ })
+  await settingsButton.click()
+  const dialog = host.getByRole('dialog', { name: '分值与初始积分' })
+  await expect(dialog).toBeVisible()
   await host.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
-  await expect(inviteButton).toBeFocused()
+  await expect(settingsButton).toBeFocused()
 
   // 乙扫码打开邀请链接加入；人到齐自动开局，房主不用再点开始。
   await open(guest, link)
@@ -109,9 +113,7 @@ test('联机三人：不填昵称自动起名、人到齐自动开局、每笔�
   await expect(first.getByText('1 / 3 人已加入')).toBeVisible()
   await expect(first.getByText('三人到齐后自动开始追分')).toBeVisible()
 
-  await first.getByRole('button', { name: /扫码邀请/ }).click()
-  const link = await first.getByRole('dialog', { name: '扫码，加入这一桌' }).getByLabel('邀请链接').inputValue()
-  await first.keyboard.press('Escape')
+  const link = await first.getByRole('region', { name: '扫码，加入这一桌' }).getByLabel('邀请链接').inputValue()
 
   // 第二位也不填昵称，自动叫「球友乙」；人还没到齐，继续等待。
   await open(second, link)
@@ -127,6 +129,7 @@ test('联机三人：不填昵称自动起名、人到齐自动开局、每笔�
   await third.getByRole('button', { name: '加入这一桌' }).click()
   for (const page of everyone) await expect(page.getByText('这一桌，正在追分')).toBeVisible()
   await expect(first.locator('.player-card h3')).toContainText(['球友甲', '球友乙', '老王'])
+  await expect(first.getByRole('region', { name: '扫码，加入这一桌' })).toHaveCount(0)
   await allScores(['100分', '100分', '100分'])
 
   // 老王犯规：不再默认给上家，要从另外两位里选一位收分。

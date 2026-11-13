@@ -260,7 +260,6 @@ summary::-webkit-details-marker { display: none; }
 .player-card.mine .delta-chip:not(.positive):not(.negative) { background: #ffffff8c; }
 :root[data-theme="dark"] .delta-chip:not(.positive):not(.negative) { background: #ffffff12; }
 .empty-seat { justify-content: center; gap: 4px; background: transparent; border: 1.5px dashed var(--line); color: var(--muted); min-height: 196px; }
-.empty-seat:hover:not(:disabled) { background: var(--surface-alt); }
 .empty-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--control); color: var(--muted); font-size: 22px; font-weight: 300; margin-bottom: 8px; }
 .empty-seat-title { font-size: 14px; font-weight: 600; color: var(--ink); }
 .empty-seat-copy { font-size: 12px; color: var(--muted); }
@@ -339,10 +338,7 @@ summary::-webkit-details-marker { display: none; }
 .modal h2 { font-size: 24px; margin: 4px 0 8px; }
 .modal .eyebrow + h2 { margin-top: 8px; }
 .modal p { color: var(--muted); font-size: 15px; line-height: 1.6; }
-.modal img { display: block; max-width: 100%; height: auto; margin: 18px auto 10px; border-radius: var(--r-m); }
-.modal .invite-room-name { color: var(--ink); font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
 .invite-code { font-family: var(--font-num); font-size: 36px; font-weight: 700; letter-spacing: .14em; margin: 4px 0 6px; padding-left: .14em; color: var(--ink); font-variant-numeric: tabular-nums; }
-.share-link { margin: 18px 0 10px; font-size: 14px; text-align: center; color: var(--muted); }
 .close-modal { position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 32px; height: 32px; background: var(--control); color: var(--muted); border-radius: 50%; font-size: 20px; line-height: 1; }
 .close-modal::after { content: ''; position: absolute; inset: -6px; }
 .close-modal:hover { background: var(--control-hover); }
@@ -443,6 +439,8 @@ summary::-webkit-details-marker { display: none; }
 }
 @media (max-width: 950px) {
   .room-layout { grid-template-columns: 1fr; }
+  /* 等人时二维码排在最前面 */
+  .room-layout > .invite-first { order: -1; }
 }
 @media (max-width: 760px) {
   .app-shell { padding: 0 16px; }
