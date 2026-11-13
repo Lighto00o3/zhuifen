@@ -183,6 +183,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
         </form>
         <p class="entry-foot">各自用手机，同步一场追分。</p><NuxtLink class="text-button full" to="/history">查看历史对局</NuxtLink>
         <div v-if="saved.length" class="recent"><span>最近的房间</span><button v-for="s in saved.slice(0, 3)" :key="s.code" :disabled="busy" @click="resume(s)"><span class="recent-room"><b v-if="s.roomName">{{ s.roomName }}</b><span class="recent-code"># {{ s.code }}</span></span><span>返回 →</span></button></div>
+        <ClientOnly><InstallHint /></ClientOnly>
       </section>
     </main>
 

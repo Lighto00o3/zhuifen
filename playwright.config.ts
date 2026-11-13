@@ -4,6 +4,8 @@ import { defineConfig } from '@playwright/test'
 // 需要能连上 PostgreSQL（本地读 apps/api/.env，CI 里用环境变量 DATABASE_URL）。
 export default defineConfig({
   testDir: 'e2e',
+  // PWA 要测构建好的静态站点，单独用 playwright.pwa.config.ts 跑。
+  testIgnore: 'pwa.spec.ts',
   timeout: 90_000,
   expect: { timeout: 15_000 },
   // 每个 IP 每分钟最多创建 5 个房间，测试按顺序跑，避免同时建太多房间被限流。

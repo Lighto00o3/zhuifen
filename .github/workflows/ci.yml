@@ -53,6 +53,13 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - run: npm run build
+      - run: npm run generate -w @zhuifen/web
+        env:
+          NUXT_SPA: 'true'
+          NUXT_PUBLIC_API_ORIGIN: https://api.example.com
+      # PWA：用上面构建好的静态站点测离线打开、发布后自动更新和添加到主屏幕的提示。
+      - run: npm run test:pwa
       # test-results 只保留失败过的尝试（包括重试后才通过的），有内容时才上传，便于排查偶发失败。
       - name: Upload Playwright traces
         if: ${{ !cancelled() }}
@@ -62,11 +69,6 @@ jobs:
           path: test-results
           if-no-files-found: ignore
           retention-days: 7
-      - run: npm run build
-      - run: npm run generate -w @zhuifen/web
-        env:
-          NUXT_SPA: 'true'
-          NUXT_PUBLIC_API_ORIGIN: https://api.example.com
   package-and-deploy:
     needs: verify
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

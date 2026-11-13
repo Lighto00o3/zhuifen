@@ -12,7 +12,11 @@ onMounted(() => {
   const followSystem = () => { if (!preference.value) theme.value = system.matches ? 'dark' : 'light' }
   const followTabs = (event: StorageEvent) => { if (event.key === 'zhuifen:theme' || event.key === null) restore() }
   restore()
-  const stop = watch(theme, value => { document.documentElement.dataset.theme = value }, { immediate: true, flush: 'sync' })
+  const stop = watch(theme, value => {
+    document.documentElement.dataset.theme = value
+    // 手机状态栏颜色跟着页面背景（main.css 里的 --page）。
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', value === 'dark' ? '#202421' : '#f4f5f4')
+  }, { immediate: true, flush: 'sync' })
   system.addEventListener('change', followSystem)
   window.addEventListener('storage', followTabs)
   cleanup = () => { stop(); system.removeEventListener('change', followSystem); window.removeEventListener('storage', followTabs) }

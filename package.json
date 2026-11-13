@@ -14,6 +14,8 @@
     "test:integration:internal": "npm run test:integration -w @zhuifen/api",
     "test:e2e": "node scripts/run.mjs test:e2e",
     "test:e2e:internal": "playwright test",
+    "test:pwa": "node scripts/run.mjs test:pwa",
+    "test:pwa:internal": "playwright test -c playwright.pwa.config.ts",
     "setup:node": "npm install --prefix .tools --registry=https://registry.npmjs.org/ --no-package-lock --no-audit --no-fund node@24.21.0"
   },
   "devDependencies": {"@playwright/test": "^1.64.1", "concurrently": "^9.2.1"},

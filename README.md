@@ -122,9 +122,12 @@ npm test
 npm run test:integration
 npm run test:e2e
 npm run build
+NUXT_SPA=true npm run generate -w @zhuifen/web && npm run test:pwa
 ```
 
 `npm run test:e2e` 用 Playwright 启动 API 和前端开发服务器（已经在运行时直接复用），在浏览器里走一遍联机双人和单机三人的主要流程。本地使用电脑上安装的 Google Chrome；CI 中先执行 `npx playwright install --with-deps chromium`。
+
+`npm run test:pwa` 测构建好的静态站点（开发环境不注册 Service Worker），所以要先执行上面的 `generate`。它用 `scripts/serve-static.mjs` 模拟 Render 静态站点，检查添加到主屏幕需要的 manifest 和图标、没网时打开页面和单机记分、接口请求不经过缓存、发布新版本后自动更新，以及 iPhone 上添加到主屏幕的提示。
 
 集成测试需要可连接的 PostgreSQL，会创建独立随机测试房间，并在结束时仅删除自己创建的房间。覆盖双人及三人广播、人数限制、旧房间兼容、积分转移、并发操作、重复提交、权限、撤销、断线重连和 API 重启后的数据库恢复。
 
@@ -165,9 +168,18 @@ Socket.IO 默认生产环境使用同域 `/socket.io/`，开发环境直连同�
 
 首页选择「单机记分」或访问 `/local`，可在一台手机上记录两人或三人追分。按出杆顺序填写昵称，可设置初始积分及各项分值；记分时先选择给分的人，再选分值和收分人。犯规自动给上家，大金、黄金9由两位输家分别记一笔，沿用联机模式的计分规则和扑克牌动画。
 
-单机对局存储在当前浏览器的 `zhuifen:local-games:v2`，旧版 `zhuifen:local-game:v1` 会自动迁移。支持刷新恢复、撤销、结束及同桌再开；新局保留已结束对局，不写入服务端，不与其他手机共享。页面加载完成后可断网记分，但首次打开或离线刷新仍需网络加载页面资源。清除浏览器数据会删除本机记录。
+单机对局存储在当前浏览器的 `zhuifen:local-games:v2`，旧版 `zhuifen:local-game:v1` 会自动迁移。支持刷新恢复、撤销、结束及同桌再开；新局保留已结束对局，不写入服务端，不与其他手机共享。在支持 Service Worker 的浏览器里打开过一次之后，没网时也能打开、刷新页面继续记分（见下文「添加到主屏幕」）。清除浏览器数据会删除本机记录。
 
 `npm test` 同时执行联机规则及单机状态测试。
+
+### 添加到主屏幕（PWA）
+
+网站可以像 App 一样添加到手机桌面，全屏打开：安卓 Chrome 等浏览器在首页显示「添加」按钮（浏览器允许安装时才出现），iPhone 的 Safari 提示「分享 → 添加到主屏幕」，微信里不提示。点「不用了」后这台手机不再提示。
+
+- `public/manifest.webmanifest` 和图标：图标由 `node scripts/pwa-icons.mjs` 根据 `favicon.svg` 生成，改了 favicon 后重新运行。
+- `public/sw.js`（Service Worker，开发时不注册）：页面先走网络，没网时用存下的副本；构建时 `modules/precache.ts` 把各个页面和这次发布的全部脚本、样式写进清单，安装时存好，所以没打开过的页面没网时也能打开。`/api/`、`/socket.io/` 和其他域名的请求不经过它，联机数据始终以服务端为准。
+- 每次发布清单都会变，浏览器会自动装上新版本并删掉旧文件。要停用时，把 `sw.js` 换成注销自己、清空缓存的版本再发布。
+
 
 ### 历史、再开一局与战绩分享
 

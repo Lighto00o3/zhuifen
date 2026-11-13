@@ -22,8 +22,19 @@ export default defineNuxtConfig({
     title: '追分 · 和球友一起记分',
     htmlAttrs: { lang: 'zh-CN' },
     script: [{ src: '/theme-init.js', tagPosition: 'head' }, { src: '/hydration-guard.js', tagPosition: 'head' }],
-    link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
-    meta: [{ name: 'description', content: '双人或三人追分，扫码加入，一次记分，大家实时看见。' }],
+    // 添加到主屏幕：manifest 给安卓等浏览器，apple-* 给 iOS Safari。
+    // theme-color 不写在这里：head 里的脚本比 meta 先执行，由 theme-init.js 按白天/夜间模式创建，切换时 app.vue 再更新。
+    link: [
+      { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+      { rel: 'manifest', href: '/manifest.webmanifest' },
+      { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+    ],
+    meta: [
+      { name: 'description', content: '双人或三人追分，扫码加入，一次记分，大家实时看见。' },
+      { name: 'mobile-web-app-capable', content: 'yes' },
+      { name: 'apple-mobile-web-app-title', content: '追分' },
+      { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
+    ],
   } },
   nitro: { prerender: { routes: ['/', '/room'] }, devProxy: {
     '/api/': { target: 'http://127.0.0.1:3001/api/', changeOrigin: true },
