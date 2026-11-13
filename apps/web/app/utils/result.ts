@@ -63,6 +63,13 @@ export function transferOf(event: ScoreEvent): { from: string; to: string; point
   return from && to && from[1] + to[1] === 0 ? { from: from[0], to: to[0], points: to[1] } : undefined
 }
 
+// 一句话描述一笔记分，例如「小林 给 阿杰 10 分（大金）」。撤销前用来确认撤的是哪一笔。
+export function describeEvent(event: ScoreEvent, members: { id: string; name: string }[]): string {
+  const name = (id: string) => members.find(member => member.id === id)?.name ?? '球友'
+  const transfer = transferOf(event)
+  return transfer ? `${name(transfer.from)} 给 ${name(transfer.to)} ${transfer.points} 分（${LABELS[event.kind]}）` : `${name(event.actorId)}的${LABELS[event.kind]}`
+}
+
 export interface ResultStats {
   // 没被撤销的记分笔数
   count: number

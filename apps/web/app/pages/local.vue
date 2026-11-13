@@ -3,7 +3,7 @@ import { DEFAULT_NAMES, DEFAULT_RULES, LABELS, type Rules, type ScoreKind } from
 import { createLocalGame, giveLocal, undoLocal, loadLocalGames, storeLocalGame, rematchLocal, LOCAL_GAME_KEY, LOCAL_GAMES_KEY, type LocalGame } from '../utils/localGame'
 import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { formatElapsed } from '../utils/format'
-import { avatarText, headline, resultStats } from '../utils/result'
+import { avatarText, describeEvent, headline, resultStats } from '../utils/result'
 import { randomId } from '../utils/random'
 import type { Transfer } from '../components/CardTransfer.vue'
 
@@ -127,7 +127,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
         <div class="room-heading"><div>
           <p class="room-status" :class="{ ended: !!game.endedAt }">{{ game.name ? (game.endedAt ? '这一场，收杆了' : '一台手机，全桌记分') : (game.members.length === 2 ? '双人追分' : '三人追分') }}</p>
           <h1>{{ game.name || (game.endedAt ? '这一场，收杆了' : '一台手机，全桌记分') }}</h1>
-          <p class="room-meta"><span v-if="game.name">{{ game.members.length === 2 ? '双人追分' : '三人追分' }}</span><span>单机模式</span><span>{{ game.events.filter(e => !e.undoneAt).length }} 笔记分</span><span class="room-timer">{{ elapsed }}</span></p>
+          <p class="room-meta"><span v-if="game.name">{{ game.members.length === 2 ? '双人追分' : '三人追分' }}</span><span>单机模式</span><span>{{ game.events.filter(e => !e.undoneAt).length }} 笔记分</span><span>用时 <span class="room-timer">{{ elapsed }}</span></span></p>
         </div></div>
         <div class="room-layout">
           <section class="score-section">
@@ -161,7 +161,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
         <button class="close-modal" aria-label="关闭弹窗" @click="close">×</button>
         <h2 id="local-dialog-title">{{ action === 'give' ? `${selected?.name}给谁？` : action === 'undo' ? '撤销上一笔记分？' : action === 'end' ? '结束这场追分？' : '开始新一局？' }}</h2>
         <template v-if="action === 'give'"><p>{{ LABELS[kind] }} {{ game.rules[kind] }} 分，从{{ selected?.name }}的积分里扣。</p><RecipientOptions :players="recipients" :members="game.members" :value="game.rules[kind]" @pick="give" /></template>
-        <template v-else><p>{{ action === 'undo' ? '还原上一笔给分，记录会标记为已撤销。' : action === 'end' ? '结束后可以查看比分和记录，不能继续给分。' : '沿用球友、座位和规则，上一场记录会保留。' }}</p><div v-if="action === 'new'" class="rematch-options"><button class="secondary full" :aria-pressed="!carry" @click="carry = false">积分清零重来，每人 {{ game.initialScore }} 分</button><button class="secondary full" :aria-pressed="carry" @click="carry = true">接着上一场的积分</button></div><div class="confirm-actions"><button class="secondary" @click="close">再想想</button><button :class="action === 'end' ? 'primary danger-solid' : 'primary'" @click="confirm">{{ action === 'undo' ? '确认撤销' : action === 'end' ? '确认结束' : '开始下一局' }}</button></div></template>
+        <template v-else><p>{{ action === 'undo' ? '积分会还原，记录里标记为已撤销。' : action === 'end' ? '结束后可以查看比分和记录，不能继续给分。' : '沿用球友、座位和规则，上一场记录会保留。' }}</p><p v-if="action === 'undo' && last" class="confirm-detail">{{ describeEvent(last, game.members) }}</p><div v-if="action === 'new'" class="rematch-options"><button class="secondary full" :aria-pressed="!carry" @click="carry = false">积分清零重来，每人 {{ game.initialScore }} 分</button><button class="secondary full" :aria-pressed="carry" @click="carry = true">接着上一场的积分</button></div><div class="confirm-actions"><button class="secondary" @click="close">再想想</button><button :class="action === 'end' ? 'primary danger-solid' : 'primary'" @click="confirm">{{ action === 'undo' ? '确认撤销' : action === 'end' ? '确认结束' : '开始下一局' }}</button></div></template>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
       </div>
     </dialog>

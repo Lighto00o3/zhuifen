@@ -18,6 +18,8 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
   const room = ref<PublicRoom | null>(null)
   const session = ref<Session | null>(null)
   const saved = ref<Session[]>([])
+  // 最近几个房间现在的状态（等人、进行中、已结束…），首页用来提示「回到这一桌」
+  const recentStatus = ref<Record<string, PublicRoom['status']>>({})
   const busy = ref(false)
   const connected = ref(false)
   const error = ref('')
@@ -72,6 +74,7 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
       try {
         const state = await api<PublicRoom>(`/rooms/${value.code}`, undefined, { token: value.token })
         rememberRoomName(state.code, state.roomName)
+        recentStatus.value = { ...recentStatus.value, [state.code]: state.status }
       } catch (e) { if (credentialGone(e)) forgetSession(value.code) }
     }))
   }
@@ -146,6 +149,6 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
   }
   onUnmounted(disconnect)
 
-  return { room, session, saved, busy, connected, error, pending, isHost, lastEvent, canUndo, previous, activeEvents, capacity,
+  return { room, session, saved, recentStatus, busy, connected, error, pending, isHost, lastEvent, canUndo, previous, activeEvents, capacity,
     api, loadSaved, refreshRecent, enter, resume, disconnect, connect, command, retry }
 }

@@ -52,6 +52,8 @@ test('联机双人：创建房间、扫码加入后自动开局、实时记分�
 
   // 乙撤销刚才那一笔。
   await guest.getByRole('button', { name: /撤销上一笔/ }).click()
+  // 确认框里写明撤销的是哪一笔。
+  await expect(guest.getByRole('dialog')).toContainText('乙 给 甲 4 分（普胜）')
   await guest.getByRole('button', { name: '确认撤销' }).click()
   await expect(scores(host)).toHaveText(['100分', '100分'])
   await expect(guest.locator('.event-list li.undone')).toHaveCount(1)
@@ -72,6 +74,12 @@ test('联机双人：创建房间、扫码加入后自动开局、实时记分�
   await expect(guest.getByText('这一桌，正在追分')).toBeVisible()
   await expect(scores(guest)).toHaveText(['99分', '101分'])
   await expect(guest.locator('.event-list li')).toHaveCount(0)
+
+  // 乙不小心回到首页：这一桌还在进行，首页顶部有「回到这一桌」，点一下就回来。
+  await guest.getByRole('button', { name: /首页/ }).click()
+  await guest.getByRole('button', { name: /回到这一桌/ }).click()
+  await expect(guest.getByText('实时同步中')).toBeVisible()
+  await expect(scores(guest)).toHaveText(['99分', '101分'])
 
   // 乙刷新页面：自动回到房间，比分还在，也不会重放之前的记分动画。
   await guest.reload()

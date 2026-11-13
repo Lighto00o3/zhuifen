@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DEFAULT_RULES } from '@zhuifen/shared'
 import { createLocalGame, giveLocal, undoLocal } from '../app/utils/localGame'
-import { avatarText, dayKey, dayLabel, durationText, headline, resultStats, shortDay, signed, standings, transferOf, winners } from '../app/utils/result'
+import { avatarText, dayKey, dayLabel, describeEvent, durationText, headline, resultStats, shortDay, signed, standings, transferOf, winners } from '../app/utils/result'
 
 function game() {
   let g = createLocalGame(['甲', '乙', '丙'], '', 100, DEFAULT_RULES)
@@ -67,6 +67,8 @@ test('一笔记分是谁给谁；旧记录里多人加减分时返回 undefined'
   assert.deepEqual(transferOf(g.events[0]!), { from: b, to: a, points: 10 })
   assert.equal(transferOf({ ...g.events[0]!, deltas: { x: 8, y: -4, z: -4 } }), undefined)
   assert.equal(transferOf({ ...g.events[0]!, deltas: { x: 0, y: 0 } }), undefined)
+  assert.equal(describeEvent(g.events[0]!, g.members), '乙 给 甲 10 分（大金）')
+  assert.equal(describeEvent({ ...g.events[0]!, deltas: { x: 8, y: -4, z: -4 } }, g.members), '乙的大金')
   assert.equal(signed(5), '+5'); assert.equal(signed(0), '0'); assert.equal(signed(-3), '-3')
 })
 

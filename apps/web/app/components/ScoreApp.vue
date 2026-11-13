@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { formatElapsed } from '../utils/format'
-import { avatarText, headline, resultStats } from '../utils/result'
+import { avatarText, describeEvent, headline, resultStats } from '../utils/result'
 import { randomHex, randomId } from '../utils/random'
 import { WAKE_TIMEOUT } from '../utils/api'
 import { DEFAULT_RULES, LABELS, type PlayerCount, type PublicRoom, type Rules, type ScoreKind, type Session } from '@zhuifen/shared'
@@ -14,7 +14,7 @@ const { slow: waking, track } = useSlowHint()
 const transfers = ref<{ enqueue: (transfer: Transfer) => void } | null>(null)
 const notices = ref<{ push: (notice: ScoreNotice) => void } | null>(null)
 const {
-  room, session, saved, busy, connected, error, pending, isHost, lastEvent, canUndo, previous, activeEvents, capacity,
+  room, session, saved, recentStatus, busy, connected, error, pending, isHost, lastEvent, canUndo, previous, activeEvents, capacity,
   api, loadSaved, refreshRecent, enter: enterRoom, resume: resumeRoom, disconnect, command, retry,
 } = useRoom({
   onChanges(changes) {
@@ -47,6 +47,9 @@ watch(() => room.value?.status, status => { if (status !== 'playing') giving.val
 let timer: ReturnType<typeof setInterval> | undefined
 let joining: { code: string; name: string; token: string; requestId: string } | undefined
 
+// 最近的房间里还没结束的那一个：首页顶部给一个「回到这一桌」
+const activeRecent = computed(() => saved.value.slice(0, 3).find(s => recentStatus.value[s.code] === 'waiting' || recentStatus.value[s.code] === 'playing'))
+const RECENT_TEXT = { waiting: '等球友上桌', playing: '正在追分', ended: '已结束', closed: '已关闭' } as const
 const totalScore = computed(() => room.value?.members.reduce((sum, p) => sum + p.score, 0) ?? 0)
 const modeLabel = computed(() => capacity.value === 2 ? '双人追分' : '三人追分')
 const STATUS_TEXT = { waiting: '等球友上桌', playing: '这一桌，正在追分', ended: '这一场，收杆了', closed: '房间已关闭' } as const
@@ -175,7 +178,8 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
       </section>
       <section class="entry-card">
         <div v-if="invited" class="card-heading invite-heading"><span class="eyebrow">球友邀请你上桌</span><h2>加入房间 <b>#{{ roomCode }}</b></h2><p>填个昵称就能加入，不填也可以。</p></div>
-        <div v-else class="card-heading"><h2>和球友开一局</h2><p>各自用手机，同步一场追分。</p></div>
+        <button v-if="!invited && activeRecent" class="resume-banner" type="button" :disabled="busy" @click="resume(activeRecent)"><i aria-hidden="true" /><span><b>{{ activeRecent.roomName || `房间 #${activeRecent.code}` }}</b><small>{{ activeRecent.roomName ? `#${activeRecent.code} · ` : '' }}{{ RECENT_TEXT[recentStatus[activeRecent.code]!] }}</small></span><em>回到这一桌 ›</em></button>
+        <div v-if="!invited" class="card-heading"><h2>和球友开一局</h2><p>各自用手机，同步一场追分。</p></div>
         <div v-if="!invited" class="tabs"><button :aria-pressed="tab === 'create'" :class="{ active: tab === 'create' }" @click="tab = 'create'; error = ''">创建房间</button><button :aria-pressed="tab === 'join'" :class="{ active: tab === 'join' }" @click="tab = 'join'; error = ''">加入房间</button></div>
         <form @submit.prevent="enter">
           <label class="field">你的昵称（选填）<input v-model="nickname" maxlength="12" placeholder="不填就叫「球友甲 / 乙 / 丙」" autocomplete="nickname" /></label>
@@ -193,7 +197,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
         <template v-else>
         <NuxtLink class="local-mode-entry" to="/local"><span><b>只有一台手机？</b><small>用单机记分，一台手机记全桌</small></span><span aria-hidden="true">›</span></NuxtLink>
         <div class="entry-links"><NuxtLink class="text-button" to="/history">历史对局</NuxtLink></div>
-        <div v-if="saved.length" class="recent"><span>最近的房间</span><button v-for="s in saved.slice(0, 3)" :key="s.code" :disabled="busy" @click="resume(s)"><span class="recent-room"><b v-if="s.roomName">{{ s.roomName }}</b><span class="recent-code"># {{ s.code }}</span></span><span aria-hidden="true">›</span></button></div>
+        <div v-if="saved.length" class="recent"><span>最近的房间</span><button v-for="s in saved.slice(0, 3)" :key="s.code" :disabled="busy" @click="resume(s)"><span class="recent-room"><b v-if="s.roomName">{{ s.roomName }}</b><span class="recent-code">#{{ s.code }}</span></span><span>{{ recentStatus[s.code] ? RECENT_TEXT[recentStatus[s.code]!] : '' }} ›</span></button></div>
         <ClientOnly><InstallHint /></ClientOnly>
         </template>
       </section>
@@ -208,7 +212,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
       <div class="room-heading"><div>
         <p class="room-status" :class="{ ended: room.status === 'ended' || room.status === 'closed' }">{{ room.roomName ? STATUS_TEXT[room.status] : modeLabel }}</p>
         <h1>{{ room.roomName || STATUS_TEXT[room.status] }}</h1>
-        <p class="room-meta"><span v-if="room.roomName">{{ modeLabel }}</span><span>房间 <b>#{{ room.code }}</b></span><template v-if="room.status === 'waiting'"><span>{{ room.members.length }} / {{ capacity }} 人已加入</span></template><template v-else><span>{{ activeEvents.length }} 笔记分</span><span class="room-timer">{{ elapsed }}</span></template></p>
+        <p class="room-meta"><span v-if="room.roomName">{{ modeLabel }}</span><span>房间 <b>#{{ room.code }}</b></span><template v-if="room.status === 'waiting'"><span>{{ room.members.length }} / {{ capacity }} 人已加入</span></template><template v-else><span>{{ activeEvents.length }} 笔记分</span><span>用时 <span class="room-timer">{{ elapsed }}</span></span></template></p>
       </div></div>
       <div v-if="!connected" class="banner">连接恢复后会自动更新比分，暂时无法记分。</div>
       <div v-if="error" class="error" role="alert">{{ error }} <button v-if="pending" :disabled="busy || !connected" @click="retry">重试这笔操作</button></div>
@@ -264,6 +268,6 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
     <SettingsDialog v-if="settingsOpen && room" v-model:room-name="roomName" v-model:initial-score="initialScore" :rules="rules" :is-host="isHost" :capacity="capacity" :busy="busy" :pending="!!pending" :connected="connected" :error="error" @close="closeSettings" @submit="configure" @retry="retry" />
     <RecipientDialog v-if="giving && room" :label="LABELS[giving]" :value="scoreValue(giving)" :players="room.members.filter(p => p.id !== session?.playerId)" :members="room.members" :disabled="busy || !connected || !!pending || room.status !== 'playing'" @pick="giveTo" @close="giving = null" />
-    <ConfirmDialog v-if="confirmation" v-model:carry="carry" :action="confirmation" :initial-score="room?.initialScore" @confirm="confirmAction" @close="confirmation = null" />
+    <ConfirmDialog v-if="confirmation" v-model:carry="carry" :action="confirmation" :initial-score="room?.initialScore" :detail="lastEvent && room ? describeEvent(lastEvent, room.members) : undefined" @confirm="confirmAction" @close="confirmation = null" />
   </div>
 </template>
