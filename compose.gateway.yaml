@@ -1,0 +1,35 @@
+# 和其他项目共用一台服务器时使用：不启动自带的 Caddy 网关，由服务器上的公共网关转发过来。
+# 公共网关只能有一个（它要占用 80、443 端口），所以多个项目共用服务器时，各项目都不能再自带网关。
+#
+# 用法见 docs/deployment.md「和其他项目共用一台服务器」。
+# 单独占用一台服务器时不需要这个文件，按原来的 compose.production.yaml 部署即可。
+
+services:
+  gateway:
+    # 不加 --profile standalone 就不会启动自带的网关
+    profiles:
+      - standalone
+
+  api:
+    environment:
+      # 允许哪些地址访问（实时连接会检查）。用 IP 访问时写 http://服务器IP:端口，
+      # 有了域名再加上 https://域名，多个之间用英文逗号隔开
+      CORS_ORIGINS: ${CORS_ORIGINS:?请在 .env 里设置 CORS_ORIGINS}
+    networks:
+      default:
+      gateway:
+        # 公共网关通过这个名字找到 API
+        aliases:
+          - zhuifen-api
+
+  web:
+    networks:
+      default:
+      gateway:
+        aliases:
+          - zhuifen-web
+
+networks:
+  gateway:
+    external: true
+    name: gateway

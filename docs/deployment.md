@@ -51,6 +51,48 @@ docker compose --env-file .env.production -f compose.production.yaml logs --tail
 
 这是明确的部署步骤，不代表已在任何服务器发布。需要先有服务器、域名和实际部署权限。
 
+## 和其他项目共用一台服务器
+
+上面的步骤假设 zhuifen 独占一台服务器：自带的 Caddy 网关占用 80 和 443。
+一台服务器上跑多个项目时，80 和 443 只能由一个**公共网关**占用，各项目都不能再自带网关。
+这时用 `compose.gateway.yaml`：不启动自带的网关，把 `api`、`web` 接到公共网关的 `gateway` 网络上，
+别名分别是 `zhuifen-api`、`zhuifen-web`。
+
+目前的腾讯云服务器（`1.14.97.154`）就是这样部署的。公共网关的配置和说明在 city_map 仓库：
+`deploy/gateway/` 和 `docs/运维手册.md`「一台服务器跑多个项目」。
+
+在服务器上的项目目录（`/opt/zhuifen`）生成 `.env`：
+
+```bash
+cat > .env <<EOF
+COMPOSE_FILE=compose.production.yaml:compose.gateway.yaml
+DOMAIN=zf.example.com
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
+CORS_ORIGINS=http://1.14.97.154:8081
+EOF
+chmod 600 .env
+```
+
+- `COMPOSE_FILE`：之后的 `docker compose` 命令自动带上这两个文件，不用再写 `--env-file`、`-f`
+- `DOMAIN`：共用网关时这个值不会被用到，填将来要用的域名即可
+- `CORS_ORIGINS`：允许哪些地址访问。备案前用 IP 访问；有了域名后加上 `https://域名`，用英文逗号隔开
+
+然后：
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+没有域名时只能用 `http://IP:端口` 访问，**这时添加到主屏幕、离线打开、一键复制链接、分享图片用不了**
+（浏览器只在 HTTPS 下开放这些功能），建房间、扫码加入、记分、实时同步不受影响。
+
+自动备份（每天 2:40，比 city_map 晚 10 分钟，避免同时导出）：`crontab -e` 加一行
+
+```
+40 2 * * * cd /opt/zhuifen && sh deploy/backup.sh >> backups/backup.log 2>&1
+```
+
 ## 三台手机验收
 
 1. 三台手机关闭 Wi-Fi，使用各自手机流量打开同一域名。
@@ -66,6 +108,7 @@ docker compose --env-file .env.production -f compose.production.yaml logs --tail
 ## 更新、停止与备份
 
 上传更新后的源码，再执行同一条 `up -d --build`。数据库与证书保存在持久化卷中，应用容器重建后继续使用。
+共用服务器部署时，命令里不用写 `--env-file`、`-f`，直接 `docker compose up -d --build`。
 
 停止服务：
 
@@ -80,6 +123,8 @@ docker compose --env-file .env.production -f compose.production.yaml down
 ```bash
 docker compose --env-file .env.production -f compose.production.yaml exec -T db pg_dump -U zhuifen -d zhuifen > zhuifen-backup.sql
 ```
+
+共用服务器部署时，用 `sh deploy/backup.sh`：导出成压缩文件放在 `backups/`，并自动删除 30 天前的旧备份。
 
 在空数据库恢复备份：
 
