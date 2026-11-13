@@ -224,7 +224,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
           <div class="players" :class="{ duel: capacity === 2 }">
             <article v-for="(player, index) in room.members" :key="player.id" :data-player-id="player.id" class="player-card" :class="{ mine: player.id === session?.playerId }">
               <div class="player-top"><span class="avatar" :class="`color-${index}`">{{ avatarText(player.name, room.members) }}</span><div><h3>{{ player.name }}<span v-if="player.id === session?.playerId" class="you">我</span></h3><span class="presence" :class="{ online: player.online }"><i />{{ player.online ? '在线' : '离线' }}<span v-if="player.id === room.hostId"> · 房主</span></span></div></div>
-              <div class="score-number" :class="{ compact: String(player.score).length > 4 }">{{ player.score }}<span>分</span></div>
+              <div class="score-number" :class="{ compact: String(player.score).length > 4 }"><AnimatedNumber :value="player.score" /><span>分</span></div>
               <div class="player-bottom"><span class="delta-chip" :class="{ positive: delta(player) > 0, negative: delta(player) < 0 }">本场 {{ delta(player) > 0 ? '+' : '' }}{{ delta(player) }}</span></div>
             </article>
             <template v-if="room.status === 'waiting'"><div v-for="n in capacity - room.members.length" :key="`empty-${n}`" class="player-card empty-seat"><span class="empty-icon" aria-hidden="true">＋</span><span class="empty-seat-title">等球友加入</span><span class="empty-seat-copy">扫码就能上桌</span></div></template>

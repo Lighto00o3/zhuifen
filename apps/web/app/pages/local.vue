@@ -135,7 +135,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
             <div class="players" :class="{ duel: game.members.length === 2 }">
               <article v-for="(p, index) in game.members" :key="p.id" :data-player-id="p.id" class="player-card" :class="{ mine: !game.endedAt && p.id === payer }">
                 <div class="player-top"><span class="avatar" :class="`color-${index}`">{{ avatarText(p.name, game.members) }}</span><div><h3>{{ p.name }}</h3></div></div>
-                <div class="score-number" :class="{ compact: String(p.score).length > 4 }">{{ p.score }}<span>分</span></div>
+                <div class="score-number" :class="{ compact: String(p.score).length > 4 }"><AnimatedNumber :value="p.score" /><span>分</span></div>
                 <div class="player-bottom"><span class="delta-chip" :class="{ positive: delta(p) > 0, negative: delta(p) < 0 }">本场 {{ delta(p) > 0 ? '+' : '' }}{{ delta(p) }}</span></div>
               </article>
             </div>
