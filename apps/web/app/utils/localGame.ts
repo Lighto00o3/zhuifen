@@ -68,6 +68,12 @@ export function storeLocalGame(storage: Pick<Storage, 'getItem' | 'setItem'>, ga
   const games = [...store.games.filter(g => g.id !== game.id), game].slice(-MAX_LOCAL_GAMES)
   storage.setItem(LOCAL_GAMES_KEY, JSON.stringify({ currentId: game.id, games }))
 }
+// 删除一场单机记录。正在进行的那一场被删掉后，就没有「当前这一场」了。
+export function removeLocalGame(storage: Pick<Storage, 'getItem' | 'setItem'>, id: string): void {
+  const store = loadLocalGames(storage)
+  const games = store.games.filter(g => g.id !== id)
+  storage.setItem(LOCAL_GAMES_KEY, JSON.stringify({ currentId: store.currentId === id ? undefined : store.currentId, games }))
+}
 export function rematchLocal(game: LocalGame, carry: boolean): LocalGame {
   if (!game.endedAt) throw new Error('请先结束本场，再开一局。')
   const next = createLocalGame(game.members.map(p => p.name), game.name, game.initialScore, game.rules)

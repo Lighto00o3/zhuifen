@@ -401,6 +401,23 @@ summary::-webkit-details-marker { display: none; }
 .date-trigger .clear-date:hover { background: #00000012; }
 .date-trigger:not(.active) { padding-right: 0; }
 .date-trigger:not(.active) .date-open { padding-right: 16px; }
+.tally-card { margin-top: 14px; padding: 22px 24px 14px; background: var(--surface); border-radius: var(--r-xl); }
+.tally-card .section-label { margin-bottom: 6px; }
+.tally-list { list-style: none; margin: 0; padding: 0; }
+.tally-list li { display: flex; align-items: center; gap: 14px; min-height: 60px; border-bottom: 1px solid var(--line); }
+.tally-list li:last-child { border-bottom: 0; }
+.tally-rank { width: 22px; font-family: var(--font-num); font-size: 18px; font-weight: 700; color: var(--faint); text-align: center; }
+.tally-rank.top { color: var(--gold); }
+.tally-name { flex: 1; min-width: 0; }
+.tally-name b { display: block; font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tally-name small { display: block; margin-top: 1px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tally-total { font-family: var(--font-num); font-size: 24px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--muted); }
+.tally-total.positive { color: var(--positive); }
+.tally-total.negative { color: var(--negative); }
+.tally-card > .text-button { margin-top: 4px; color: var(--muted); }
+.danger-text { color: var(--danger); }
+.danger-text:hover:not(:disabled) { background: var(--danger-soft); }
+.finished-actions .spacer { flex: 1; }
 .history-day { margin-top: 22px; }
 .history-day > h2 { display: flex; align-items: baseline; gap: 8px; margin: 0 4px 10px; font-size: 15px; font-weight: 600; letter-spacing: 0; }
 .history-day > h2 small { font-size: 13px; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -527,6 +544,7 @@ summary::-webkit-details-marker { display: none; }
   .history-filters .mode-picker { width: auto; flex: 1 1 auto; max-width: 240px; }
   .history-filters .mode-picker button { padding: 0 6px; white-space: nowrap; }
   .history-games { gap: 10px; }
+  .tally-card { padding: 18px 18px 10px; border-radius: var(--r-l); }
   .history-game { padding: 16px 18px 8px; }
   .result-card .rank-row .rank-score { font-size: 26px; }
   .result-headline h2 { font-size: 22px; }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DEFAULT_RULES } from '@zhuifen/shared'
 import { createLocalGame, giveLocal, undoLocal } from '../app/utils/localGame'
-import { avatarText, dayKey, dayLabel, describeEvent, durationText, headline, resultStats, shortDay, signed, standings, transferOf, winners } from '../app/utils/result'
+import { avatarText, dayKey, dayLabel, describeEvent, tally, durationText, headline, resultStats, shortDay, signed, standings, transferOf, winners } from '../app/utils/result'
 
 function game() {
   let g = createLocalGame(['甲', '乙', '丙'], '', 100, DEFAULT_RULES)
@@ -55,6 +55,26 @@ test('头像文字：默认取第一个字，同桌首字相同时取最后一�
   assert.deepEqual(table.map(p => avatarText(p.name, table)), ['甲', '乙', '老'])
   assert.equal(avatarText('阿杰', [{ name: '阿杰' }, { name: '小林' }]), '阿')
   assert.equal(avatarText('😀笑', [{ name: '😀笑' }, { name: '😀哭' }]), '笑')
+})
+
+test('累计输赢：按昵称合计多场，赢得多的在前；默认昵称不参与', () => {
+  const play = (names: string[], gives: [number, number][]) => {
+    let g = createLocalGame(names, '', 100, DEFAULT_RULES)
+    for (const [from, to] of gives) g = giveLocal(g, g.members[from]!.id, 'normal', g.members[to]!.id)
+    return g
+  }
+  const games = [
+    play(['老王', '阿杰', '小林'], [[1, 0], [2, 0]]),          // 老王 +8，阿杰 -4，小林 -4
+    play(['阿杰', '老王'], [[1, 0], [1, 0], [0, 1]]),          // 阿杰 +4，老王 -4
+    play(['老王', '', ''], [[1, 0]]),                           // 老王 +4，球友甲 -4（不统计），球友乙 0
+    play(['小林', '阿杰'], []),                                 // 打平，没有赢家
+  ]
+  assert.deepEqual(tally(games), [
+    { name: '老王', games: 3, wins: 2, total: 8 },
+    { name: '阿杰', games: 3, wins: 1, total: 0 },
+    { name: '小林', games: 2, wins: 0, total: -4 },
+  ])
+  assert.deepEqual(tally([]), [])
 })
 
 test('用时文字', () => {

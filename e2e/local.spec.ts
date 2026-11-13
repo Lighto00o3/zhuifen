@@ -44,6 +44,16 @@ test('单机三人：开局、犯规和普胜都选收分人、撤销、结束�
   await expect(game).toHaveCount(1)
   await expect(game).toContainText('单机测试局')
   await expect(game).toContainText('单机')
+
+  // 打开这一场：一句话结论、名次；删除后历史里就没有了。
+  await game.click()
+  await expect(page.getByRole('heading', { name: '丙赢了 1 分' })).toBeVisible()
+  await expect(page.locator('.rank-name').first()).toContainText('丙')
+  await page.getByRole('button', { name: '删除这场' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确认删除' }).click()
+  await expect(page).toHaveURL(/\/history$/)
+  await expect(page.getByRole('heading', { name: '还没有打完的对局' })).toBeVisible()
+  await expect(page.locator('.history-game')).toHaveCount(0)
 })
 
 test('单机不填昵称：自动叫球友甲、乙、丙，填了的保留；双人犯规只能给对手', async ({ page }) => {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { loadLocalGames } from '../utils/localGame'
+import { loadLocalGames, removeLocalGame } from '../utils/localGame'
 import { cacheOnlineGames, ONLINE_HISTORY_KEY, missingRounds, type HistoryGame } from '../utils/gameHistory'
 import { clockTime } from '../utils/format'
-import { dayKey, dayLabel, durationText, headline, resultStats, shortDay } from '../utils/result'
+import { dayKey, dayLabel, durationText, headline, resultStats, shortDay, signed, tally } from '../utils/result'
 import { createApi, credentialGone, WAKE_TIMEOUT } from '../utils/api'
 import { forgetSessions, loadSessions } from '../utils/sessions'
 import type { PublicRoom, RoundRecord } from '@zhuifen/shared'
@@ -39,10 +39,23 @@ const groups = computed(() => {
   }
   return result
 })
+// 累计输赢跟着当前的筛选条件走；只有一场时和那一场的结果一样，就不显示了
+const shown = computed(() => groups.value.flatMap(group => group.games))
+const board = computed(() => shown.value.length > 1 ? tally(shown.value) : [])
+const boardOpen = ref(false)
+const deleting = ref(false)
+function removeSelected() {
+  if (!selected.value || selected.value.mode !== 'local') return
+  try { removeLocalGame(localStorage, selected.value.id) } catch { error.value = '没能删除这场记录，请重试。'; deleting.value = false; return }
+  deleting.value = false
+  load()
+  void navigateTo('/history')
+}
 const title = (g: HistoryGame) => g.name || (g.members.length === 2 ? '双人追分' : '三人追分')
 // 换了模式后，选中的那天可能已经没有对局了，回到全部日期
 watch(counts, value => { if (day.value && !value[day.value]) day.value = '' })
-useModalFocus(calendarOpen, () => { calendarOpen.value = false })
+const modalOpen = computed(() => calendarOpen.value || deleting.value)
+useModalFocus(modalOpen, () => { calendarOpen.value = false; deleting.value = false })
 function load() {
   const all: HistoryGame[] = []
   try { all.push(...loadLocalGames(localStorage).games.filter(g => g.endedAt).map(g => ({ ...g, mode: 'local' as const }))) } catch { error.value = '部分本机记录无法读取，原数据仍保留。' }
@@ -75,8 +88,8 @@ onMounted(async () => {
 </script>
 <template>
   <div class="app-shell">
-    <header class="site-header" :inert="calendarOpen"><NuxtLink class="brand" to="/"><span class="brand-ball" aria-hidden="true"><span>9</span></span>追分</NuxtLink><ThemeToggle /></header>
-    <main class="room-page history-page" :class="{ detail: !!selected }" :inert="calendarOpen">
+    <header class="site-header" :inert="modalOpen"><NuxtLink class="brand" to="/"><span class="brand-ball" aria-hidden="true"><span>9</span></span>追分</NuxtLink><ThemeToggle /></header>
+    <main class="room-page history-page" :class="{ detail: !!selected }" :inert="modalOpen">
       <div class="room-toolbar"><NuxtLink class="pill" :to="selected ? '/history' : '/'"><span aria-hidden="true">‹</span>{{ selected ? '全部对局' : '首页' }}</NuxtLink></div>
       <p v-if="error" class="error" role="status">{{ error }}</p>
 
@@ -95,7 +108,7 @@ onMounted(async () => {
               <div><b>{{ durationText(selected.startedAt, selected.endedAt) }}</b><span>用时</span></div>
               <div><b>{{ stats.biggest ? stats.biggest.points : '—' }}</b><span>{{ stats.biggest ? `最大一笔 · ${stats.biggest.label}` : '最大一笔' }}</span></div>
             </div>
-            <div class="finished-actions"><ShareScore :game="selected" primary /></div>
+            <div class="finished-actions"><ShareScore :game="selected" primary /><span class="spacer" /><button v-if="selected.mode === 'local'" class="text-button danger-text" type="button" @click="deleting = true">删除这场</button></div>
           </section>
           <aside class="history-panel"><div class="section-label"><h2>本场记录</h2><span>{{ selected.events.length }} 笔</span></div><p v-if="!selected.events.length" class="muted">本场没有记分。</p><EventList v-else :events="selected.events" :members="selected.members" /></aside>
         </div>
@@ -115,6 +128,18 @@ onMounted(async () => {
             <button v-if="day" type="button" class="clear-date" aria-label="清除日期，查看全部" @click="day = ''">×</button>
           </span>
         </div>
+        <!-- 累计输赢：按昵称把当前列表里的对局加起来 -->
+        <section v-if="board.length" class="tally-card" aria-labelledby="tally-title">
+          <div class="section-label"><h2 id="tally-title">累计输赢</h2><span>{{ shown.length }} 场合计</span></div>
+          <ol class="tally-list">
+            <li v-for="(row, index) in (boardOpen ? board : board.slice(0, 3))" :key="row.name">
+              <span class="tally-rank" :class="{ top: index === 0 && row.total > 0 }">{{ index + 1 }}</span>
+              <span class="tally-name"><b>{{ row.name }}</b><small>{{ row.games }} 场 · 赢 {{ row.wins }} 场</small></span>
+              <span class="tally-total" :class="{ positive: row.total > 0, negative: row.total < 0 }">{{ signed(row.total) }}</span>
+            </li>
+          </ol>
+          <button v-if="board.length > 3" class="text-button full" type="button" :aria-expanded="boardOpen" @click="boardOpen = !boardOpen">{{ boardOpen ? '收起' : `查看全部 ${board.length} 位球友` }}</button>
+        </section>
         <p v-if="loading" class="muted" role="status">正在更新联机对局…{{ waking ? '服务正在启动，第一次可能需要半分钟左右。' : '' }}</p>
 
         <section v-for="group in groups" :key="group.key" class="history-day">
@@ -136,6 +161,13 @@ onMounted(async () => {
         <p v-if="games.length" class="history-storage-note">单机记录只保存在这台设备的浏览器里；联机记录保存在房间里，换设备后需要重新进入房间才能看到。</p>
       </template>
     </main>
+    <div v-if="deleting && selected" class="modal-backdrop" @click.self="deleting = false">
+      <section class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+        <h2 id="delete-title">删除这场记录？</h2>
+        <p>「{{ title(selected) }}」的比分和每一笔记录都会从这台设备上删掉，不能恢复。</p>
+        <div class="confirm-actions"><button class="secondary" type="button" @click="deleting = false">再想想</button><button class="primary danger-solid" type="button" @click="removeSelected">确认删除</button></div>
+      </section>
+    </div>
     <HistoryCalendar v-if="calendarOpen" v-model="day" :counts="counts" @close="calendarOpen = false" />
   </div>
 </template>

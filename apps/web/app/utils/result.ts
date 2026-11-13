@@ -1,4 +1,4 @@
-import { LABELS, type Player, type ScoreEvent } from '@zhuifen/shared'
+import { DEFAULT_NAMES, LABELS, type Player, type ScoreEvent } from '@zhuifen/shared'
 import type { LocalGame } from './localGame'
 import { gameDelta } from './gameHistory'
 
@@ -68,6 +68,32 @@ export function describeEvent(event: ScoreEvent, members: { id: string; name: st
   const name = (id: string) => members.find(member => member.id === id)?.name ?? '球友'
   const transfer = transferOf(event)
   return transfer ? `${name(transfer.from)} 给 ${name(transfer.to)} ${transfer.points} 分（${LABELS[event.kind]}）` : `${name(event.actorId)}的${LABELS[event.kind]}`
+}
+
+export interface Tally {
+  name: string
+  // 打了几场、赢了几场（赢 = 那一场赢分最多，并列也算）
+  games: number
+  wins: number
+  // 这些场次的输赢加起来
+  total: number
+}
+// 累计输赢：按昵称把多场对局的输赢加起来，赢得多的排前面。
+// 没填昵称的默认名字（球友甲、乙、丙）每场可能是不同的人，不参与统计。
+export function tally(games: ResultGame[]): Tally[] {
+  const table = new Map<string, Tally>()
+  for (const game of games) {
+    const top = new Set(winners(game).map(item => item.player.id))
+    for (const item of standings(game)) {
+      const name = item.player.name
+      if ((DEFAULT_NAMES as readonly string[]).includes(name)) continue
+      const row = table.get(name) ?? { name, games: 0, wins: 0, total: 0 }
+      row.games++; row.total += item.delta
+      if (top.has(item.player.id)) row.wins++
+      table.set(name, row)
+    }
+  }
+  return [...table.values()].sort((a, b) => b.total - a.total || b.wins - a.wins || a.name.localeCompare(b.name, 'zh'))
 }
 
 export interface ResultStats {

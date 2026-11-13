@@ -76,6 +76,21 @@ test('重开保留球友规则；继承积分后本场从零计算；历史原�
   assert.equal(storage.getItem(LOCAL_GAMES_KEY), before)
 })
 
+test('删除单机记录：只删指定的一场，删的是当前这一场时不再有当前场', async () => {
+  const { removeLocalGame, loadLocalGames, storeLocalGame } = await import('../app/utils/localGame')
+  const memory = new Map<string, string>()
+  const storage = { getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => { memory.set(key, value) } }
+  const first = createLocalGame(['甲', '乙'], '第一场', 100, DEFAULT_RULES)
+  const second = createLocalGame(['甲', '乙'], '第二场', 100, DEFAULT_RULES)
+  storeLocalGame(storage, first); storeLocalGame(storage, second)
+  removeLocalGame(storage, first.id)
+  assert.deepEqual(loadLocalGames(storage), { currentId: second.id, games: [second] })
+  removeLocalGame(storage, 'not-exist')
+  assert.equal(loadLocalGames(storage).games.length, 1)
+  removeLocalGame(storage, second.id)
+  assert.deepEqual(loadLocalGames(storage), { games: [] })
+})
+
 test('没有 crypto.randomUUID（局域网 HTTP）时也能开局', async () => {
   const original = crypto.randomUUID
   Object.defineProperty(crypto, 'randomUUID', { value: undefined, configurable: true })

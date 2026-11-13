@@ -19,6 +19,8 @@ const {
 } = useRoom({
   onChanges(changes) {
     changes.transfers.forEach(t => transfers.value?.enqueue(t))
+    // 有人给我分、或者我给出去的分记上了，手机轻轻震一下（安卓支持，苹果没有这个接口）
+    if (changes.transfers.some(t => t.to === t.mine || t.from === t.mine)) try { navigator.vibrate?.(30) } catch { /* 不支持就算了 */ }
     changes.notices.forEach(n => notices.value?.push(n))
   },
   // 等待开局时同步房间设置；房主正在编辑设置时不覆盖他填的内容。
@@ -50,6 +52,7 @@ let joining: { code: string; name: string; token: string; requestId: string } | 
 // 最近的房间里还没结束的那一个：首页顶部给一个「回到这一桌」
 const activeRecent = computed(() => saved.value.slice(0, 3).find(s => recentStatus.value[s.code] === 'waiting' || recentStatus.value[s.code] === 'playing'))
 const RECENT_TEXT = { waiting: '等球友上桌', playing: '正在追分', ended: '已结束', closed: '已关闭' } as const
+useWakeLock(computed(() => room.value?.status === 'playing'))
 const totalScore = computed(() => room.value?.members.reduce((sum, p) => sum + p.score, 0) ?? 0)
 const modeLabel = computed(() => capacity.value === 2 ? '双人追分' : '三人追分')
 const STATUS_TEXT = { waiting: '等球友上桌', playing: '这一桌，正在追分', ended: '这一场，收杆了', closed: '房间已关闭' } as const
