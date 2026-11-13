@@ -1,5 +1,5 @@
 import QRCode from 'qrcode'
-import { headline, resultStats, signed, standings, winners, type ResultGame } from './result'
+import { avatarText, headline, resultStats, signed, standings, winners, type ResultGame } from './result'
 
 // 战绩海报：把一场对局的结果画成一张竖版图片（深绿球台 + 金色赢家），用来截屏或保存后发给球友。
 // 只包含昵称、比分、日期、笔数和用时，不包含房间凭证。
@@ -27,7 +27,12 @@ function fit(ctx: Ctx, text: string, max: number): string {
 }
 function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath()
-  ctx.roundRect(x, y, w, h, r)
+  // 旧一些的浏览器内核（包括部分安卓微信）没有 ctx.roundRect，用圆弧自己画
+  if (typeof ctx.roundRect === 'function') { ctx.roundRect(x, y, w, h, r); return }
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
 }
 // 品牌的 9 号球
 function nineBall(ctx: Ctx, cx: number, cy: number, r: number, alpha = 1) {
@@ -170,7 +175,7 @@ export async function drawPoster(game: PosterGame, siteUrl: string): Promise<HTM
     // 头像
     const [bg, fg] = AVATARS[item.seat % AVATARS.length]!
     ctx.beginPath(); ctx.arc(PAD + 134, mid, 36, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill()
-    ctx.fillStyle = fg; ctx.font = `600 32px ${TEXT}`; ctx.fillText(item.player.name.slice(0, 1), PAD + 134, mid + 2)
+    ctx.fillStyle = fg; ctx.font = `600 32px ${TEXT}`; ctx.fillText(avatarText(item.player.name, game.members), PAD + 134, mid + 2)
     // 本场输赢（右侧大数字）
     ctx.textAlign = 'right'; ctx.font = `700 60px ${NUM}`
     ctx.fillStyle = item.delta > 0 ? GOLD : item.delta < 0 ? RED : DIM

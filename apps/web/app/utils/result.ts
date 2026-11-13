@@ -36,6 +36,13 @@ export function headline(game: ResultGame): string {
   return `${top.map(item => item.player.name).join('、')}${top.length > 1 ? '并列' : ''}赢了 ${top[0]!.delta} 分`
 }
 
+// 头像里的一个字：默认取昵称第一个字；同桌有人第一个字相同（比如球友甲、球友乙）就取最后一个字，方便区分。
+export function avatarText(name: string, members: { name: string }[]): string {
+  const first = [...name][0] ?? ''
+  const clash = members.filter(member => [...member.name][0] === first).length > 1
+  return clash ? [...name].at(-1) ?? first : first
+}
+
 export function signed(value: number): string {
   return `${value > 0 ? '+' : ''}${value}`
 }

@@ -36,6 +36,10 @@ test('联机双人：创建房间、扫码加入后自动开局、实时记分�
 
   // 乙扫码打开邀请链接加入；人到齐自动开局，房主不用再点开始。
   await open(guest, link)
+  // 扫码进来只看到「填昵称 → 加入」，没有建房间的选项。
+  await expect(guest.getByText('球友邀请你上桌')).toBeVisible()
+  await expect(guest.getByLabel('房间名（选填）')).toHaveCount(0)
+  await expect(guest.getByRole('button', { name: '创建房间' })).toHaveCount(0)
   await guest.getByLabel('你的昵称').fill('乙')
   await guest.getByRole('button', { name: '加入这一桌' }).click()
   await expect(guest.getByText('实时同步中')).toBeVisible()

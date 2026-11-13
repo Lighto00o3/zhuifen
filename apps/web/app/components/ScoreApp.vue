@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { formatElapsed } from '../utils/format'
-import { headline, resultStats } from '../utils/result'
+import { avatarText, headline, resultStats } from '../utils/result'
 import { randomHex, randomId } from '../utils/random'
 import { WAKE_TIMEOUT } from '../utils/api'
 import { DEFAULT_RULES, LABELS, type PlayerCount, type PublicRoom, type Rules, type ScoreKind, type Session } from '@zhuifen/shared'
@@ -29,6 +29,10 @@ const nickname = ref('')
 const roomName = ref('')
 const roomCode = ref('')
 const tab = ref<'create' | 'join'>('create')
+// 通过邀请链接（/room?room=房间号）进来、这台手机又没进过这个房间：只显示「填昵称 → 加入」。
+const invited = ref(false)
+// 打开 /room 时先显示「正在进入」，等确认是恢复房间还是新加入后再显示对应内容，避免首页闪一下。
+const entering = ref(route.path === '/room')
 const initialScore = ref(100)
 const playerCount = ref<PlayerCount>(3)
 const rules = reactive<Rules>({ ...DEFAULT_RULES })
@@ -116,6 +120,10 @@ async function configure() {
   await command({ type: 'configure', roomName: roomName.value, initialScore: initialScore.value, rules: { ...rules }, order: room.value!.members.map(p => p.id) })
   if (!error.value && !pending.value) closeSettings()
 }
+function leaveInvite() {
+  invited.value = false; tab.value = 'create'; roomCode.value = ''; error.value = ''
+  void navigateTo('/')
+}
 function back() {
   if (busy.value || pending.value) return
   disconnect()
@@ -137,8 +145,9 @@ onMounted(() => {
   if (code && /^\d{6}$/.test(code)) {
     roomCode.value = code; tab.value = 'join'
     const existing = saved.value.find(s => s.code === code)
-    if (existing) void resume(existing)
-  }
+    if (existing) void resume(existing).finally(() => { invited.value = !room.value; entering.value = false })
+    else { invited.value = true; entering.value = false }
+  } else entering.value = false
   timer = setInterval(() => {
     elapsed.value = formatElapsed(room.value?.startedAt, room.value?.endedAt)
   }, 1000)
@@ -156,20 +165,22 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
       <span v-else class="header-note">双人 / 三人追分</span><ThemeToggle /></div>
     </header>
 
-    <main v-if="!room" class="landing" :inert="modalOpen">
-      <section class="intro">
+    <main v-if="!room && entering" class="entering"><p class="muted" role="status">正在进入房间…</p></main>
+    <main v-else-if="!room" class="landing" :class="{ invited }" :inert="modalOpen">
+      <section v-if="!invited" class="intro">
         <h1>开一桌，<br />一起追分。</h1>
         <p class="intro-copy">输的人给分，整桌一起看。<br />多人联机，或用一台手机记全桌。</p>
         <div class="table-visual" aria-hidden="true"><div class="felt"><span class="pocket p1" /><span class="pocket p2" /><span class="pocket p3" /><span class="pocket p4" /><span class="cue-ball" /><span class="nine-ball"><span>9</span></span><span class="one-ball"><span>1</span></span><span class="shot-line" /></div></div>
         <div class="benefits"><span>不用注册</span><span>扫码同桌</span><span>实时给分</span></div>
       </section>
       <section class="entry-card">
-        <div class="card-heading"><h2>和球友开一局</h2><p>各自用手机，同步一场追分。</p></div>
-        <div class="tabs"><button :aria-pressed="tab === 'create'" :class="{ active: tab === 'create' }" @click="tab = 'create'; error = ''">创建房间</button><button :aria-pressed="tab === 'join'" :class="{ active: tab === 'join' }" @click="tab = 'join'; error = ''">加入房间</button></div>
+        <div v-if="invited" class="card-heading invite-heading"><span class="eyebrow">球友邀请你上桌</span><h2>加入房间 <b>#{{ roomCode }}</b></h2><p>填个昵称就能加入，不填也可以。</p></div>
+        <div v-else class="card-heading"><h2>和球友开一局</h2><p>各自用手机，同步一场追分。</p></div>
+        <div v-if="!invited" class="tabs"><button :aria-pressed="tab === 'create'" :class="{ active: tab === 'create' }" @click="tab = 'create'; error = ''">创建房间</button><button :aria-pressed="tab === 'join'" :class="{ active: tab === 'join' }" @click="tab = 'join'; error = ''">加入房间</button></div>
         <form @submit.prevent="enter">
           <label class="field">你的昵称（选填）<input v-model="nickname" maxlength="12" placeholder="不填就叫「球友甲 / 乙 / 丙」" autocomplete="nickname" /></label>
-          <label v-if="tab === 'join'" class="field">房间号<input v-model="roomCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="输入球友的 6 位房间号" required /></label>
-          <template v-else>
+          <label v-if="tab === 'join' && !invited" class="field">房间号<input v-model="roomCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="输入球友的 6 位房间号" required /></label>
+          <template v-else-if="tab === 'create'">
             <label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="例如：周末球友局，留空也可以" /></label>
             <div class="field"><span id="player-count-label">追分人数</span><div class="mode-picker" role="group" aria-labelledby="player-count-label"><button type="button" :aria-pressed="playerCount === 2" :class="{ active: playerCount === 2 }" @click="playerCount = 2">双人追分</button><button type="button" :aria-pressed="playerCount === 3" :class="{ active: playerCount === 3 }" @click="playerCount = 3">三人追分</button></div></div>
             <DisclosurePanel class="entry-settings"><template #title>初始积分 <b>{{ initialScore }} 分</b></template><label class="field">每人初始积分<div class="input-unit"><input v-model.number="initialScore" type="number" min="1" max="10000" required /><span>分</span></div></label><p>其他分值可在球友到齐前由房主设置，到齐后自动开局。</p></DisclosurePanel>
@@ -178,10 +189,13 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
           <button class="primary full" :disabled="busy" type="submit">{{ busy ? '正在准备…' : tab === 'create' ? '创建房间，邀请球友' : '加入这一桌' }}</button>
           <p v-if="waking" class="muted wake-hint" role="status">服务正在启动，第一次打开可能需要半分钟左右，请稍候。</p>
         </form>
+        <div v-if="invited" class="entry-links"><button class="text-button" type="button" @click="leaveInvite">不是这个房间？回首页</button></div>
+        <template v-else>
         <NuxtLink class="local-mode-entry" to="/local"><span><b>只有一台手机？</b><small>用单机记分，一台手机记全桌</small></span><span aria-hidden="true">›</span></NuxtLink>
         <div class="entry-links"><NuxtLink class="text-button" to="/history">历史对局</NuxtLink></div>
         <div v-if="saved.length" class="recent"><span>最近的房间</span><button v-for="s in saved.slice(0, 3)" :key="s.code" :disabled="busy" @click="resume(s)"><span class="recent-room"><b v-if="s.roomName">{{ s.roomName }}</b><span class="recent-code"># {{ s.code }}</span></span><span aria-hidden="true">›</span></button></div>
         <ClientOnly><InstallHint /></ClientOnly>
+        </template>
       </section>
     </main>
 
@@ -202,7 +216,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
         <section class="score-section">
           <div class="players" :class="{ duel: capacity === 2 }">
             <article v-for="(player, index) in room.members" :key="player.id" :data-player-id="player.id" class="player-card" :class="{ mine: player.id === session?.playerId }">
-              <div class="player-top"><span class="avatar" :class="`color-${index}`">{{ player.name.slice(0, 1) }}</span><div><h3>{{ player.name }}<span v-if="player.id === session?.playerId" class="you">我</span></h3><span class="presence" :class="{ online: player.online }"><i />{{ player.online ? '在线' : '离线' }}<span v-if="player.id === room.hostId"> · 房主</span></span></div></div>
+              <div class="player-top"><span class="avatar" :class="`color-${index}`">{{ avatarText(player.name, room.members) }}</span><div><h3>{{ player.name }}<span v-if="player.id === session?.playerId" class="you">我</span></h3><span class="presence" :class="{ online: player.online }"><i />{{ player.online ? '在线' : '离线' }}<span v-if="player.id === room.hostId"> · 房主</span></span></div></div>
               <div class="score-number" :class="{ compact: String(player.score).length > 4 }">{{ player.score }}<span>分</span></div>
               <div class="player-bottom"><span class="delta-chip" :class="{ positive: delta(player) > 0, negative: delta(player) < 0 }">本场 {{ delta(player) > 0 ? '+' : '' }}{{ delta(player) }}</span></div>
             </article>

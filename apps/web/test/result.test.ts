@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DEFAULT_RULES } from '@zhuifen/shared'
 import { createLocalGame, giveLocal, undoLocal } from '../app/utils/localGame'
-import { dayKey, dayLabel, durationText, headline, resultStats, shortDay, signed, standings, transferOf, winners } from '../app/utils/result'
+import { avatarText, dayKey, dayLabel, durationText, headline, resultStats, shortDay, signed, standings, transferOf, winners } from '../app/utils/result'
 
 function game() {
   let g = createLocalGame(['甲', '乙', '丙'], '', 100, DEFAULT_RULES)
@@ -48,6 +48,13 @@ test('统计：撤销的不算，最大一笔带上类型', () => {
   const undone = undoLocal(g)
   assert.equal(resultStats(undone).count, 2)
   assert.equal(resultStats(createLocalGame(['甲', '乙'], '', 100, DEFAULT_RULES)).biggest, undefined)
+})
+
+test('头像文字：默认取第一个字，同桌首字相同时取最后一个字', () => {
+  const table = [{ name: '球友甲' }, { name: '球友乙' }, { name: '老王' }]
+  assert.deepEqual(table.map(p => avatarText(p.name, table)), ['甲', '乙', '老'])
+  assert.equal(avatarText('阿杰', [{ name: '阿杰' }, { name: '小林' }]), '阿')
+  assert.equal(avatarText('😀笑', [{ name: '😀笑' }, { name: '😀哭' }]), '笑')
 })
 
 test('用时文字', () => {
