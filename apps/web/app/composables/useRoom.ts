@@ -25,7 +25,6 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
   let socket: Socket | undefined
   let subscription: ReturnType<typeof createSubscription> | undefined
 
-  const me = computed(() => room.value?.members.find(p => p.id === session.value?.playerId))
   const isHost = computed(() => room.value?.hostId === session.value?.playerId)
   const lastEvent = computed(() => room.value?.events.findLast(e => !e.undoneAt))
   const canUndo = computed(() => !!lastEvent.value && (isHost.value || lastEvent.value.actorId === session.value?.playerId))
@@ -147,6 +146,6 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
   }
   onUnmounted(disconnect)
 
-  return { room, session, saved, busy, connected, error, pending, me, isHost, lastEvent, canUndo, previous, activeEvents, capacity,
+  return { room, session, saved, busy, connected, error, pending, isHost, lastEvent, canUndo, previous, activeEvents, capacity,
     api, loadSaved, refreshRecent, enter, resume, disconnect, connect, command, retry }
 }

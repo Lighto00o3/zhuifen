@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { loadLocalGames } from '../utils/localGame'
-import { cacheOnlineGames, ONLINE_HISTORY_KEY, gameDelta, missingRounds, type HistoryGame } from '../utils/gameHistory'
+import { cacheOnlineGames, ONLINE_HISTORY_KEY, missingRounds, type HistoryGame } from '../utils/gameHistory'
+import { clockTime } from '../utils/format'
+import { dayKey, dayLabel, durationText, headline, resultStats, shortDay } from '../utils/result'
 import { createApi, credentialGone, WAKE_TIMEOUT } from '../utils/api'
 import { forgetSessions, loadSessions } from '../utils/sessions'
 import type { PublicRoom, RoundRecord } from '@zhuifen/shared'
@@ -12,13 +14,35 @@ const api = createApi(apiOrigin, undefined, WAKE_TIMEOUT)
 const { slow: waking, track } = useSlowHint()
 const games = ref<HistoryGame[]>([])
 const mode = ref<'all' | 'local' | 'online'>('all')
+// 选中的日期（2026-11-14），空串表示全部日期
 const day = ref('')
+const calendarOpen = ref(false)
 const loading = ref(true)
 const error = ref('')
 const selected = computed(() => games.value.find(g => g.id === route.query.id))
-const dateKey = (value: string) => { const d = new Date(value); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
-const filtered = computed(() => games.value.filter(g => (mode.value === 'all' || g.mode === mode.value) && (!day.value || dateKey(g.startedAt) === day.value)).sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt)))
-const date = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12: false, month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const stats = computed(() => selected.value ? resultStats(selected.value) : undefined)
+const inMode = computed(() => games.value.filter(g => mode.value === 'all' || g.mode === mode.value))
+// 日历上每天的场数，跟着「全部 / 单机 / 联机」变
+const counts = computed(() => {
+  const result: Record<string, number> = {}
+  for (const g of inMode.value) { const key = dayKey(g.startedAt); result[key] = (result[key] ?? 0) + 1 }
+  return result
+})
+// 按天分组，最近的在前
+const groups = computed(() => {
+  const sorted = inMode.value.filter(g => !day.value || dayKey(g.startedAt) === day.value).sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+  const result: { key: string; games: HistoryGame[] }[] = []
+  for (const g of sorted) {
+    const key = dayKey(g.startedAt)
+    if (result.at(-1)?.key === key) result.at(-1)!.games.push(g)
+    else result.push({ key, games: [g] })
+  }
+  return result
+})
+const title = (g: HistoryGame) => g.name || (g.members.length === 2 ? '双人追分' : '三人追分')
+// 换了模式后，选中的那天可能已经没有对局了，回到全部日期
+watch(counts, value => { if (day.value && !value[day.value]) day.value = '' })
+useModalFocus(calendarOpen, () => { calendarOpen.value = false })
 function load() {
   const all: HistoryGame[] = []
   try { all.push(...loadLocalGames(localStorage).games.filter(g => g.endedAt).map(g => ({ ...g, mode: 'local' as const }))) } catch { error.value = '部分本机记录无法读取，原数据仍保留。' }
@@ -51,24 +75,67 @@ onMounted(async () => {
 </script>
 <template>
   <div class="app-shell">
-    <header class="site-header"><NuxtLink class="brand" to="/"><span class="brand-ball" aria-hidden="true"><span>9</span></span>追分</NuxtLink><ThemeToggle /></header>
-    <main class="room-page history-page">
-      <div class="room-toolbar"><NuxtLink class="secondary home-button" :to="selected ? '/history' : '/'">{{ selected ? '← 全部历史' : '← 返回首页' }}</NuxtLink></div>
+    <header class="site-header" :inert="calendarOpen"><NuxtLink class="brand" to="/"><span class="brand-ball" aria-hidden="true"><span>9</span></span>追分</NuxtLink><ThemeToggle /></header>
+    <main class="room-page history-page" :class="{ detail: !!selected }" :inert="calendarOpen">
+      <div class="room-toolbar"><NuxtLink class="pill" :to="selected ? '/history' : '/'"><span aria-hidden="true">‹</span>{{ selected ? '全部对局' : '首页' }}</NuxtLink></div>
       <p v-if="error" class="error" role="status">{{ error }}</p>
-      <template v-if="selected">
-        <div class="room-heading"><div><h1>{{ selected.name || '这一场，收杆了' }}</h1><p>{{ date(selected.startedAt) }} · {{ selected.mode === 'online' ? `联机 #${selected.code}` : '单机记分' }}</p></div></div>
-        <div class="players" :class="{ duel: selected.members.length === 2 }"><article v-for="(p, i) in selected.members" :key="p.id" class="player-card"><div class="player-top"><span class="avatar" :class="`color-${i}`">{{ p.name.slice(0, 1) }}</span><h3>{{ p.name }}</h3></div><div class="score-number" :class="{ compact: String(p.score).length > 4 }">{{ p.score }}<span>分</span></div><div class="player-bottom"><span :class="gameDelta(selected, p.id) >= 0 ? 'positive' : 'negative'">本场 {{ gameDelta(selected, p.id) > 0 ? '+' : '' }}{{ gameDelta(selected, p.id) }}</span></div></article></div>
-        <ShareScore :game="selected" />
-        <section class="history-panel history-detail"><div class="section-label"><h2>本场记录</h2><span>{{ selected.events.length }} 笔</span></div><p v-if="!selected.events.length" class="muted">本场没有记分。</p><ol v-else class="event-list"><li v-for="event in [...selected.events].reverse()" :key="event.id" :class="{ undone: event.undoneAt }"><div class="event-heading"><b>{{ selected.members.find(p => p.id === event.actorId)?.name }} · {{ event.label }}</b><time>{{ new Date(event.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time></div><div class="event-deltas"><span v-for="(delta, id) in event.deltas" v-show="delta !== 0" :key="id">{{ selected.members.find(p => p.id === id)?.name }} <b :class="delta > 0 ? 'positive' : 'negative'">{{ delta > 0 ? '+' : '' }}{{ delta }}</b></span></div><span v-if="event.undoneAt" class="undo-label">已撤销</span></li></ol></section>
+
+      <!-- 一场对局的详情 -->
+      <template v-if="selected && stats">
+        <div class="room-heading"><div>
+          <h1>{{ title(selected) }}</h1>
+          <p class="room-meta"><span>{{ dayLabel(dayKey(selected.startedAt)) }} {{ clockTime(selected.startedAt) }}</span><span>{{ selected.mode === 'online' ? `联机 #${selected.code}` : '单机记分' }}</span></p>
+        </div></div>
+        <div class="room-layout">
+          <section class="result-card">
+            <div class="result-headline"><span class="eyebrow">本场结果</span><h2>{{ headline(selected) }}</h2></div>
+            <RankList :game="selected" />
+            <div class="result-stats">
+              <div><b>{{ stats.count }}</b><span>笔记分</span></div>
+              <div><b>{{ durationText(selected.startedAt, selected.endedAt) }}</b><span>用时</span></div>
+              <div><b>{{ stats.biggest ? stats.biggest.points : '—' }}</b><span>{{ stats.biggest ? `最大一笔 · ${stats.biggest.label}` : '最大一笔' }}</span></div>
+            </div>
+            <div class="finished-actions"><ShareScore :game="selected" primary /></div>
+          </section>
+          <aside class="history-panel"><div class="section-label"><h2>本场记录</h2><span>{{ selected.events.length }} 笔</span></div><p v-if="!selected.events.length" class="muted">本场没有记分。</p><EventList v-else :events="selected.events" :members="selected.members" /></aside>
+        </div>
       </template>
+
+      <!-- 全部对局 -->
       <template v-else>
-        <div class="room-heading"><div><h1>每一桌，都记得。</h1><p>查看已结束的单机和联机对局。</p></div></div>
-        <div class="history-filters"><div class="mode-picker"><button v-for="(label, value) in { all: '全部', local: '单机', online: '联机' }" :key="value" :class="{ active: mode === value }" :aria-pressed="mode === value" @click="mode = value">{{ label }}</button></div><label class="field">对局日期<input v-model="day" type="date" /></label><button v-if="day" class="text-button" @click="day = ''">清除日期</button></div>
-        <p v-if="loading" class="muted" role="status">正在更新联机历史…{{ waking ? '服务正在启动，第一次可能需要半分钟左右。' : '' }}</p>
-        <p v-if="!filtered.length" class="empty-history">{{ games.length ? '这个条件下没有对局，试试其他日期或模式。' : '结束一场追分后，比分和记录会出现在这里。' }}</p>
-        <div class="history-games"><NuxtLink v-for="g in filtered" :key="g.id" class="history-game" :to="{ path: '/history', query: { id: g.id } }"><div class="history-game-heading"><b>{{ g.name || (g.members.length === 2 ? '双人追分' : '三人追分') }}</b><span>{{ g.mode === 'online' ? '联机' : '单机' }}</span></div><time>{{ date(g.startedAt) }}</time><div class="history-scores"><div v-for="p in g.members" :key="p.id"><span>{{ p.name }}</span><b>{{ p.score }}<small :class="gameDelta(g, p.id) >= 0 ? 'positive' : 'negative'">{{ gameDelta(g, p.id) > 0 ? '+' : '' }}{{ gameDelta(g, p.id) }}</small></b></div></div><span class="history-game-foot">{{ g.events.filter(e => !e.undoneAt).length }} 笔记分 <span>查看记录 →</span></span></NuxtLink></div>
-        <p class="history-storage-note">单机记录保存在此浏览器。联机记录保存在房间中，此浏览器会缓存已查看的历史；请保留房间凭证。</p>
+        <div class="history-hero"><h1>历史对局</h1><p>{{ games.length ? `一共 ${games.length} 场，每一桌都记得。` : '每一桌，都记得。' }}</p></div>
+        <div v-if="games.length" class="history-filters">
+          <div class="mode-picker" role="group" aria-label="对局类型"><button v-for="(label, value) in { all: '全部', local: '单机', online: '联机' }" :key="value" type="button" :class="{ active: mode === value }" :aria-pressed="mode === value" @click="mode = value">{{ label }}</button></div>
+          <span class="spacer" />
+          <span class="pill date-trigger" :class="{ active: !!day }">
+            <button type="button" class="date-open" aria-haspopup="dialog" @click="calendarOpen = true">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 10h17M8 3v4m8-4v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              <span class="date-label">{{ day ? shortDay(day) : '按日期找' }}</span>
+            </button>
+            <button v-if="day" type="button" class="clear-date" aria-label="清除日期，查看全部" @click="day = ''">×</button>
+          </span>
+        </div>
+        <p v-if="loading" class="muted" role="status">正在更新联机对局…{{ waking ? '服务正在启动，第一次可能需要半分钟左右。' : '' }}</p>
+
+        <section v-for="group in groups" :key="group.key" class="history-day">
+          <h2>{{ dayLabel(group.key) }}<small>{{ group.games.length }} 场</small></h2>
+          <div class="history-games">
+            <NuxtLink v-for="g in group.games" :key="g.id" class="history-game" :to="{ path: '/history', query: { id: g.id } }">
+              <div class="history-game-heading"><b>{{ title(g) }}</b><span class="chevron" aria-hidden="true">›</span></div>
+              <div class="history-game-meta"><span>{{ clockTime(g.startedAt) }}</span><span>{{ g.mode === 'online' ? '联机' : '单机' }}</span><span>{{ g.events.filter(e => !e.undoneAt).length }} 笔</span><span>{{ durationText(g.startedAt, g.endedAt) }}</span></div>
+              <RankList :game="g" />
+            </NuxtLink>
+          </div>
+        </section>
+
+        <div v-if="!groups.length && !loading" class="history-empty">
+          <div class="empty-ball" aria-hidden="true">🎱</div>
+          <template v-if="games.length"><h2>这里还没有对局</h2><p>换个类型看看，或者回到全部对局。</p><button class="pill" type="button" @click="mode = 'all'; day = ''">查看全部对局</button></template>
+          <template v-else><h2>还没有打完的对局</h2><p>结束一场追分后，比分和每一笔记录都会留在这里。</p><NuxtLink class="primary" to="/">去开一桌</NuxtLink></template>
+        </div>
+        <p v-if="games.length" class="history-storage-note">单机记录只保存在这台设备的浏览器里；联机记录保存在房间里，换设备后需要重新进入房间才能看到。</p>
       </template>
     </main>
+    <HistoryCalendar v-if="calendarOpen" v-model="day" :counts="counts" @close="calendarOpen = false" />
   </div>
 </template>

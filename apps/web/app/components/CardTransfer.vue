@@ -47,7 +47,7 @@ async function play() {
     active.value = null
     void nextTick().then(play)
   } })
-  timeline.fromTo(caption, { opacity: 0, y: reduced ? 0 : 12 }, { opacity: 1, y: 0, duration: .2 })
+  timeline.fromTo(caption, { opacity: 0, y: reduced ? 0 : -12 }, { opacity: 1, y: 0, duration: .2 })
   if (!reduced) {
     nodes.forEach((node, index) => {
       const offset = (index - (nodes.length - 1) / 2) * 13
@@ -95,7 +95,8 @@ defineExpose({ enqueue })
 <style scoped>
 .transfer-layer { position: fixed; inset: 0; z-index: 80; pointer-events: none; overflow: hidden; perspective: 900px; }
 .transfer-card { position: absolute; left: 0; top: 0; width: 72px; height: 104px; opacity: 0; will-change: transform, opacity; }
-.transfer-caption { position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); left: 50%; translate: -50% 0; width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 16px; padding: 18px 24px; border-radius: 24px; background: var(--feedback, #ffffffed); backdrop-filter: blur(18px); box-shadow: 0 12px 50px #1d1d1f20; color: var(--ink, #1d1d1f); font-size: 14px; font-weight: 600; opacity: 0; }
-.transfer-caption small { display: block; font-size: 11px; color: var(--muted, #737377); margin-top: 5px; font-weight: 400; }.transfer-amount { font-size: 36px; font-weight: 700; letter-spacing: -1.5px; white-space: nowrap; }.transfer-amount small { display: inline; margin-left: 4px; letter-spacing: 0; }.received .transfer-amount { color: var(--positive, #23745e); }.paid .transfer-amount { color: var(--negative, #b54c48); }
+/* 放在屏幕上方：底部经常有弹窗和确认按钮，提示不能挡住它们 */
+.transfer-caption { position: absolute; top: max(14px, env(safe-area-inset-top)); left: 50%; translate: -50% 0; width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 16px; padding: 12px 22px 12px 18px; border-radius: 999px; background: var(--feedback, #ffffffed); backdrop-filter: blur(18px); box-shadow: 0 10px 40px #00000026, 0 0 0 1px #0000000a; color: var(--ink, #1d1d1f); font-size: 14px; font-weight: 600; opacity: 0; }
+.transfer-caption small { display: block; font-size: 12px; color: var(--muted, #737377); margin-top: 2px; font-weight: 400; }.transfer-amount { font-family: var(--font-num); font-size: 30px; font-weight: 700; letter-spacing: -1px; white-space: nowrap; }.transfer-amount small { display: inline; margin-left: 4px; letter-spacing: 0; }.received .transfer-amount { color: var(--positive, #23745e); }.paid .transfer-amount { color: var(--negative, #b54c48); }
 @media (prefers-reduced-motion: reduce) { .transfer-card { display: none; } }
 </style>

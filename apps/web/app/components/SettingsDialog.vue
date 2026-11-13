@@ -12,8 +12,7 @@ const initialScore = defineModel<number>('initialScore', { required: true })
   <div class="modal-backdrop" @click.self="emit('close')">
     <section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <button class="close-modal" aria-label="关闭房间设置" @click="emit('close')">×</button>
-      <span class="eyebrow">{{ isHost ? '人到齐前可以调整' : '由房主设置' }}</span>
-      <h2 id="settings-title">房间与开局设置</h2>
+      <h2 id="settings-title">分值与初始积分</h2>
       <p class="settings-description">{{ isHost ? '设置好房间和分值，保存后整桌同步。人到齐会自动开局，开局后不能再改。' : '查看本桌规则，只有房主可以修改。' }}</p>
       <form @submit.prevent="emit('submit')">
         <label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="留空则只显示房间号" :disabled="!isHost || busy || pending" /></label>

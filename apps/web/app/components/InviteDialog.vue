@@ -19,15 +19,14 @@ async function copy() {
   <div class="modal-backdrop" @click.self="emit('close')">
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="invite-title">
       <button class="close-modal" aria-label="关闭邀请" @click="emit('close')">×</button>
-      <span class="eyebrow">给球友留个位置</span>
       <h2 id="invite-title">扫码，加入这一桌</h2>
-      <p>球友用自己的手机扫码打开</p>
+      <p>球友用自己的手机扫一扫</p>
       <img :src="qr" alt="加入房间的二维码" width="240" height="240" />
       <p v-if="roomName" class="invite-room-name">{{ roomName }}</p>
       <div class="invite-code">{{ code }}</div>
-      <p>也可以在首页输入房间号加入</p>
+      <p>或者在首页输入这个房间号</p>
       <input class="share-link" :value="link" aria-label="邀请链接" readonly @focus="($event.target as HTMLInputElement).select()" />
-      <button class="primary full" @click="copy">复制邀请链接 ↗</button>
+      <button class="primary full" @click="copy">复制邀请链接</button>
       <p v-if="notice" role="status">{{ notice }}</p>
     </section>
   </div>

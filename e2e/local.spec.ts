@@ -35,7 +35,7 @@ test('单机三人：开局、犯规和普胜都选收分人、撤销、结束�
 
   await page.getByRole('button', { name: '结束本场' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '确认结束' }).click()
-  await expect(page.getByRole('heading', { name: '这一场，收杆了' })).toBeVisible()
+  await expect(page.getByText('这一场，收杆了')).toBeVisible()
 
   await open(page, '/history')
   const game = page.locator('.history-game')

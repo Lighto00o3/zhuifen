@@ -1,7 +1,9 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { open, ready } from './helpers'
 
 const scores = (page: Page) => page.locator('.score-number')
+// 历史卡片里某位球友的最终积分
+const score = (game: Locator, name: string) => game.locator('.rank-row').filter({ has: game.page().locator('.rank-name', { hasText: name }) }).locator('.rank-score')
 
 test('联机双人：创建房间、扫码加入后自动开局、实时记分、撤销、结束、再开一局、刷新恢复、历史页', async ({ browser }) => {
   // 两个独立的浏览器上下文，相当于两台手机。
@@ -33,7 +35,7 @@ test('联机双人：创建房间、扫码加入后自动开局、实时记分�
   await guest.getByLabel('你的昵称').fill('乙')
   await guest.getByRole('button', { name: '加入这一桌' }).click()
   await expect(guest.getByText('实时同步中')).toBeVisible()
-  for (const page of [host, guest]) await expect(page.getByRole('heading', { name: '这一桌，正在追分' })).toBeVisible()
+  for (const page of [host, guest]) await expect(page.getByText('这一桌，正在追分')).toBeVisible()
 
   // 乙给甲普胜 4 分，两边实时同步。
   await guest.getByRole('button', { name: /^给普胜/ }).click()
@@ -53,13 +55,13 @@ test('联机双人：创建房间、扫码加入后自动开局、实时记分�
   // 甲结束本场。
   await host.getByRole('button', { name: '结束本场' }).click()
   await host.getByRole('button', { name: '确认结束' }).click()
-  await expect(guest.getByRole('heading', { name: '这一场，收杆了' })).toBeVisible()
+  await expect(guest.getByText('这一场，收杆了')).toBeVisible()
 
   // 再开一局，接着上一场的积分。
   await host.getByRole('button', { name: '再开一局' }).click()
   await host.getByRole('button', { name: '接着上一场的积分' }).click()
   await host.getByRole('button', { name: '开始下一局' }).click()
-  await expect(guest.getByRole('heading', { name: '这一桌，正在追分' })).toBeVisible()
+  await expect(guest.getByText('这一桌，正在追分')).toBeVisible()
   await expect(scores(guest)).toHaveText(['99分', '101分'])
   await expect(guest.locator('.event-list li')).toHaveCount(0)
 
@@ -75,15 +77,15 @@ test('联机双人：创建房间、扫码加入后自动开局、实时记分�
   await expect(scores(host)).toHaveText(['106分', '94分'])
   await host.getByRole('button', { name: '结束本场' }).click()
   await host.getByRole('button', { name: '确认结束' }).click()
-  await expect(guest.getByRole('heading', { name: '这一场，收杆了' })).toBeVisible()
+  await expect(guest.getByText('这一场，收杆了')).toBeVisible()
 
   // 历史页能看到这两局，比分正确。
   await open(guest, '/history')
   const games = guest.locator('.history-game')
   await expect(games).toHaveCount(2)
   await expect(games.nth(0)).toContainText('端到端测试局')
-  await expect(games.nth(0).locator('.history-scores')).toContainText('甲106')
-  await expect(games.nth(1).locator('.history-scores')).toContainText('甲99')
+  await expect(score(games.nth(0), '甲')).toHaveText('106')
+  await expect(score(games.nth(1), '甲')).toHaveText('99')
 
   // 回到首页，最近的房间里有这个房间。
   await open(guest, '/')
@@ -117,13 +119,13 @@ test('联机三人：不填昵称自动起名、人到齐自动开局、每笔�
   await expect(second.getByText('实时同步中')).toBeVisible()
   await expect(second.locator('.player-card.mine h3')).toContainText('球友乙')
   await expect(first.getByText('2 / 3 人已加入')).toBeVisible()
-  await expect(first.getByRole('heading', { name: '等球友上桌' })).toBeVisible()
+  await expect(first.getByText('等球友上桌')).toBeVisible()
 
   // 第三位自己填了昵称；他一加入人就到齐了，三台手机自动进入比赛，没有人点开始。
   await open(third, link)
   await third.getByLabel('你的昵称').fill('老王')
   await third.getByRole('button', { name: '加入这一桌' }).click()
-  for (const page of everyone) await expect(page.getByRole('heading', { name: '这一桌，正在追分' })).toBeVisible()
+  for (const page of everyone) await expect(page.getByText('这一桌，正在追分')).toBeVisible()
   await expect(first.locator('.player-card h3')).toContainText(['球友甲', '球友乙', '老王'])
   await allScores(['100分', '100分', '100分'])
 
@@ -159,7 +161,7 @@ test('联机三人：不填昵称自动起名、人到齐自动开局、每笔�
   // 房主结束本场，三台手机都看到收杆。
   await first.getByRole('button', { name: '结束本场' }).click()
   await first.getByRole('button', { name: '确认结束' }).click()
-  for (const page of everyone) await expect(page.getByRole('heading', { name: '这一场，收杆了' })).toBeVisible()
+  for (const page of everyone) await expect(page.getByText('这一场，收杆了')).toBeVisible()
 
   // 老王刷新页面：自动回到房间，比分还在。
   await third.reload()
@@ -171,6 +173,6 @@ test('联机三人：不填昵称自动起名、人到齐自动开局、每笔�
   const games = third.locator('.history-game')
   await expect(games).toHaveCount(1)
   await expect(games.nth(0)).toContainText('三人测试局')
-  await expect(games.nth(0).locator('.history-scores')).toContainText('球友甲101')
-  await expect(games.nth(0).locator('.history-scores')).toContainText('老王98')
+  await expect(score(games.nth(0), '球友甲')).toHaveText('101')
+  await expect(score(games.nth(0), '老王')).toHaveText('98')
 })

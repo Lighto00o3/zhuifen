@@ -41,7 +41,7 @@ test('没网时：打开过和没打开过的页面都能显示，单机记分�
   await page.getByRole('button', { name: '开始单机记分' }).click()
   await expect(page.locator('.score-number')).toHaveText(['100分', '100分', '100分'])
   await page.goto('/history')
-  await expect(page.getByRole('heading', { name: '每一桌，都记得。' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '历史对局' })).toBeVisible()
   await page.goto('/')
   await expect(page.getByRole('heading', { name: /开一桌/ })).toBeVisible()
   expect(await page.evaluate(() => fetch('/api/health').then(() => 'resolved', () => 'rejected'))).toBe('rejected')

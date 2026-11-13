@@ -8,6 +8,6 @@
   // 手机状态栏颜色跟着页面背景（和 main.css 里的 --page 一致），切换白天/夜间模式时由 app.vue 更新。
   const meta = document.createElement('meta');
   meta.name = 'theme-color';
-  meta.content = theme === 'dark' ? '#202421' : '#f4f5f4';
+  meta.content = theme === 'dark' ? '#161a17' : '#f5f5f7';
   document.head.append(meta);
 })();

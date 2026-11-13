@@ -19,10 +19,10 @@ const carry = defineModel<boolean>('carry', { default: false })
       <h2 id="confirm-title">{{ TEXT[action].title }}</h2>
       <p>{{ TEXT[action].body }}</p>
       <div v-if="action === 'restart'" class="rematch-options">
-        <button class="secondary full" :aria-pressed="!carry" @click="carry = false">重置积分 · 每人 {{ initialScore }} 分</button>
+        <button class="secondary full" :aria-pressed="!carry" @click="carry = false">积分清零重来，每人 {{ initialScore }} 分</button>
         <button class="secondary full" :aria-pressed="carry" @click="carry = true">接着上一场的积分</button>
       </div>
-      <div class="confirm-actions"><button class="secondary" @click="emit('close')">再想想</button><button class="primary" @click="emit('confirm')">{{ TEXT[action].confirm }}</button></div>
+      <div class="confirm-actions"><button class="secondary" @click="emit('close')">再想想</button><button :class="action === 'end' || action === 'close' ? 'primary danger-solid' : 'primary'" @click="emit('confirm')">{{ TEXT[action].confirm }}</button></div>
     </section>
   </div>
 </template>
