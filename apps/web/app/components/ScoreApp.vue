@@ -263,7 +263,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
     <footer class="site-footer" :inert="modalOpen"><span>追分 · 和球友一起记分</span><span>专注下一杆</span></footer>
 
     <SettingsDialog v-if="settingsOpen && room" v-model:room-name="roomName" v-model:initial-score="initialScore" :rules="rules" :is-host="isHost" :capacity="capacity" :busy="busy" :pending="!!pending" :connected="connected" :error="error" @close="closeSettings" @submit="configure" @retry="retry" />
-    <RecipientDialog v-if="giving && room" :label="LABELS[giving]" :value="scoreValue(giving)" :players="room.members.filter(p => p.id !== session?.playerId)" :disabled="busy || !connected || !!pending || room.status !== 'playing'" @pick="giveTo" @close="giving = null" />
+    <RecipientDialog v-if="giving && room" :label="LABELS[giving]" :value="scoreValue(giving)" :players="room.members.filter(p => p.id !== session?.playerId)" :members="room.members" :disabled="busy || !connected || !!pending || room.status !== 'playing'" @pick="giveTo" @close="giving = null" />
     <ConfirmDialog v-if="confirmation" v-model:carry="carry" :action="confirmation" :initial-score="room?.initialScore" @confirm="confirmAction" @close="confirmation = null" />
   </div>
 </template>

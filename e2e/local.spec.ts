@@ -13,7 +13,9 @@ test('单机三人：开局、犯规和普胜都选收分人、撤销、结束�
 
   // 甲犯规：不再默认给上家，从另外两位里选一位收分。
   await page.getByRole('button', { name: '甲给犯规 1 分' }).click()
-  await expect(page.getByRole('dialog').getByRole('button', { name: /^给 / })).toHaveText(['给 乙 1 分', '给 丙 1 分'])
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^给 / })).toHaveCount(2)
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^给 / }).nth(0)).toHaveAccessibleName('给 乙 1 分')
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^给 / }).nth(1)).toHaveAccessibleName('给 丙 1 分')
   await page.getByRole('dialog').getByRole('button', { name: '给 丙 1 分' }).click()
   await expect(scores).toHaveText(['99分', '100分', '101分'])
 
@@ -57,7 +59,8 @@ test('单机不填昵称：自动叫球友甲、乙、丙，填了的保留；�
   await page.getByRole('button', { name: '开始单机记分' }).click()
   await expect(page.locator('.player-card h3')).toHaveText(['球友甲', '球友乙'])
   await page.getByRole('button', { name: '球友甲给犯规 1 分' }).click()
-  await expect(page.getByRole('dialog').getByRole('button', { name: /^给 / })).toHaveText(['给 球友乙 1 分'])
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^给 / })).toHaveCount(1)
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^给 / }).nth(0)).toHaveAccessibleName('给 球友乙 1 分')
   await page.getByRole('dialog').getByRole('button', { name: '给 球友乙 1 分' }).click()
   await expect(page.locator('.score-number')).toHaveText(['99分', '101分'])
 })

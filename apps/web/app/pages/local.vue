@@ -159,8 +159,8 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
     <dialog ref="dialog" class="modal local-dialog" aria-labelledby="local-dialog-title" @cancel.prevent="close" @click="($event.target === dialog) && close()">
       <div v-if="action && game" class="local-dialog-content">
         <button class="close-modal" aria-label="关闭弹窗" @click="close">×</button>
-        <h2 id="local-dialog-title">{{ action === 'give' ? `${selected?.name}给${LABELS[kind]}` : action === 'undo' ? '撤销上一笔记分？' : action === 'end' ? '结束这场追分？' : '开始新一局？' }}</h2>
-        <template v-if="action === 'give'"><p>扣 {{ selected?.name }} {{ game.rules[kind] }} 分，给收分的球友。</p><div class="recipient-actions"><button v-for="p in recipients" :key="p.id" class="primary full" @click="give(p.id)">给 {{ p.name }} {{ game.rules[kind] }} 分</button></div></template>
+        <h2 id="local-dialog-title">{{ action === 'give' ? `${selected?.name}给谁？` : action === 'undo' ? '撤销上一笔记分？' : action === 'end' ? '结束这场追分？' : '开始新一局？' }}</h2>
+        <template v-if="action === 'give'"><p>{{ LABELS[kind] }} {{ game.rules[kind] }} 分，从{{ selected?.name }}的积分里扣。</p><RecipientOptions :players="recipients" :members="game.members" :value="game.rules[kind]" @pick="give" /></template>
         <template v-else><p>{{ action === 'undo' ? '还原上一笔给分，记录会标记为已撤销。' : action === 'end' ? '结束后可以查看比分和记录，不能继续给分。' : '沿用球友、座位和规则，上一场记录会保留。' }}</p><div v-if="action === 'new'" class="rematch-options"><button class="secondary full" :aria-pressed="!carry" @click="carry = false">积分清零重来，每人 {{ game.initialScore }} 分</button><button class="secondary full" :aria-pressed="carry" @click="carry = true">接着上一场的积分</button></div><div class="confirm-actions"><button class="secondary" @click="close">再想想</button><button :class="action === 'end' ? 'primary danger-solid' : 'primary'" @click="confirm">{{ action === 'undo' ? '确认撤销' : action === 'end' ? '确认结束' : '开始下一局' }}</button></div></template>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
       </div>

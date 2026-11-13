@@ -139,7 +139,9 @@ test('联机三人：不填昵称自动起名、人到齐自动开局、每笔�
   // 老王犯规：不再默认给上家，要从另外两位里选一位收分。
   const dialog = (page: Page) => page.getByRole('dialog', { name: '这笔分给谁？' })
   await third.getByRole('button', { name: /^犯规/ }).click()
-  await expect(dialog(third).getByRole('button', { name: /^给 / })).toHaveText(['给 球友甲 1 分', '给 球友乙 1 分'])
+  await expect(dialog(third).getByRole('button', { name: /^给 / })).toHaveCount(2)
+  await expect(dialog(third).getByRole('button', { name: /^给 / }).nth(0)).toHaveAccessibleName('给 球友甲 1 分')
+  await expect(dialog(third).getByRole('button', { name: /^给 / }).nth(1)).toHaveAccessibleName('给 球友乙 1 分')
   // 先取消一次：不会记分。
   await dialog(third).getByRole('button', { name: '取消给分' }).click()
   await expect(dialog(third)).toBeHidden()
@@ -156,7 +158,9 @@ test('联机三人：不填昵称自动起名、人到齐自动开局、每笔�
 
   // 球友乙给老王普胜 4 分。
   await second.getByRole('button', { name: /^给普胜/ }).click()
-  await expect(dialog(second).getByRole('button', { name: /^给 / })).toHaveText(['给 球友甲 4 分', '给 老王 4 分'])
+  await expect(dialog(second).getByRole('button', { name: /^给 / })).toHaveCount(2)
+  await expect(dialog(second).getByRole('button', { name: /^给 / }).nth(0)).toHaveAccessibleName('给 球友甲 4 分')
+  await expect(dialog(second).getByRole('button', { name: /^给 / }).nth(1)).toHaveAccessibleName('给 老王 4 分')
   await dialog(second).getByRole('button', { name: '给 老王 4 分' }).click()
   await allScores(['101分', '97分', '102分'])
 

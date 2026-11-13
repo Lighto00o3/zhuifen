@@ -45,7 +45,7 @@
   --green: #1f6a51;
   --ink: #1d1d1f;
   --muted: #6e6e73;
-  --faint: #a1a1a6;
+  --faint: #86868b;
   --line: #0000000f;
   --yellow: #edce70;
   --shadow-pop: 0 24px 80px #00000030, 0 2px 8px #00000010;
@@ -349,8 +349,14 @@ summary::-webkit-details-marker { display: none; }
 .close-modal::after { content: ''; position: absolute; inset: -6px; }
 .close-modal:hover { background: var(--control-hover); }
 .confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 24px; }
-.recipient-actions { display: grid; gap: 10px; margin-top: 22px; }
-.recipient-actions button { min-height: 56px; overflow-wrap: anywhere; }
+.recipient-actions { display: grid; gap: 8px; margin-top: 20px; }
+.recipient-option { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 72px; padding: 0 20px 0 16px; border-radius: var(--r-l); background: var(--surface-alt); text-align: left; }
+.recipient-option:hover:not(:disabled) { background: var(--control); }
+.recipient-name { flex: 1; min-width: 0; }
+.recipient-name b { display: block; font-size: 17px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recipient-name small { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.recipient-gain { font-family: var(--font-num); font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: var(--positive); font-variant-numeric: tabular-nums; }
+.cancel-give { margin-top: 8px; color: var(--muted); }
 .settings-modal { width: 520px; text-align: left; }
 .settings-modal .settings-description { margin-bottom: 22px; }
 .settings-modal .rule-help { margin-bottom: 20px; }
