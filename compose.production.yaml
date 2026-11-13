@@ -26,6 +26,8 @@ services:
       CORS_ORIGINS: https://${DOMAIN:?请设置域名}
       # 只经过 Caddy 一层代理，按 X-Forwarded-For 的最后一跳取真实 IP 用于限流。
       TRUST_PROXY: "1"
+      # 日志按北京时间显示。Node 自带时区数据，不用在镜像里装 tzdata。
+      TZ: Asia/Shanghai
     depends_on:
       db:
         condition: service_healthy
@@ -43,6 +45,8 @@ services:
     environment:
       PORT: "3000"
       NITRO_HOST: 0.0.0.0
+      # 服务端渲染出来的时间和日志都按北京时间
+      TZ: Asia/Shanghai
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
