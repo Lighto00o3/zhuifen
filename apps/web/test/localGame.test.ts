@@ -19,6 +19,28 @@ test('三人犯规给选中的球友，黄金9两位输家分别给分，撤销�
   assert.deepEqual(readLocalGame(JSON.stringify(second)), second)
 })
 
+test('三人局大金、黄金9：记完一位输家后提示另一位也给，两笔记全或换了别的操作后不再提示', async () => {
+  const { pendingPair } = await import('../app/utils/localGame')
+  const start = createLocalGame(['甲', '乙', '丙'], '', 100, DEFAULT_RULES)
+  const [a, b, c] = start.members.map(p => p.id)
+  assert.equal(pendingPair(start), undefined)
+  const first = giveLocal(start, b!, 'dajin', a!)
+  assert.deepEqual({ ...pendingPair(first), eventId: undefined }, { eventId: undefined, payerId: c, recipientId: a, kind: 'dajin', points: 10 })
+  const both = giveLocal(first, c!, 'dajin', a!)
+  assert.equal(pendingPair(both), undefined)
+  // 撤销第二笔后又只剩一笔，继续提示
+  assert.equal(pendingPair(undoLocal(both))?.payerId, c)
+  // 接着又来一次大金（同一个人又输了）：这是新的一对，提示另一位
+  const again = giveLocal(both, c!, 'dajin', a!)
+  assert.equal(pendingPair(again)?.payerId, b)
+  // 普胜、犯规不提示；双人局不提示；结束后不提示
+  assert.equal(pendingPair(giveLocal(first, c!, 'normal', a!)), undefined)
+  assert.equal(pendingPair(giveLocal(start, b!, 'golden9', c!))?.recipientId, c)
+  const duel = createLocalGame(['甲', '乙'], '', 100, DEFAULT_RULES)
+  assert.equal(pendingPair(giveLocal(duel, duel.members[0]!.id, 'dajin', duel.members[1]!.id)), undefined)
+  assert.equal(pendingPair({ ...first, endedAt: new Date().toISOString() }), undefined)
+})
+
 test('双人允许负分、自定义规则；结束后不能记分或撤销', () => {
   const game = createLocalGame(['甲', '乙'], '练球', 1, { ...DEFAULT_RULES, dajin: 21 })
   const scored = giveLocal(game, game.members[0]!.id, 'dajin', game.members[1]!.id)

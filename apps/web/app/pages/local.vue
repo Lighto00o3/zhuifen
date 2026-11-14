@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { DEFAULT_NAMES, DEFAULT_RULES, LABELS, type Rules, type ScoreKind } from '@zhuifen/shared'
-import { createLocalGame, giveLocal, undoLocal, loadLocalGames, storeLocalGame, rematchLocal, LOCAL_GAME_KEY, LOCAL_GAMES_KEY, type LocalGame } from '../utils/localGame'
+import { createLocalGame, giveLocal, pendingPair, undoLocal, loadLocalGames, storeLocalGame, rematchLocal, LOCAL_GAME_KEY, LOCAL_GAMES_KEY, type LocalGame } from '../utils/localGame'
 import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { formatElapsed } from '../utils/format'
 import { avatarText, describeEvent, headline, resultStats } from '../utils/result'
@@ -85,6 +85,22 @@ function animate(deltas: Record<string, number>, undo: boolean) {
   const from = entries.find(([, d]) => d < 0), to = entries.find(([, d]) => d > 0)
   if (from && to) transfers.value?.enqueue({ id: randomId(), from: from[0], to: to[0], fromName: person(from[0]), toName: person(to[0]), points: to[1], undo, suit: CARD_SUITS[kind.value] })
 }
+// 大金、黄金9 记完一位输家后，「另一位也给」的一键补记；点了「不用了」就不再提示这一笔
+const dismissedPair = ref('')
+const followUp = computed(() => {
+  const pair = game.value && !historical.value ? pendingPair(game.value) : undefined
+  return pair && pair.eventId !== dismissedPair.value ? pair : undefined
+})
+function giveFollowUp() {
+  const pair = followUp.value
+  if (!game.value || !pair) return
+  try {
+    const next = giveLocal(game.value, pair.payerId, pair.kind, pair.recipientId)
+    save(next)
+    kind.value = pair.kind
+    animate(next.events.at(-1)!.deltas, false)
+  } catch (e) { error.value = e instanceof Error ? e.message : '记分失败，请重试。' }
+}
 function confirm() {
   if (!game.value) return
   try {
@@ -157,8 +173,12 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
             <section v-if="!game.endedAt && !historical" class="action-panel">
               <div class="section-label"><h2>谁来给分？</h2><span>先选输的人，再点牌</span></div>
               <div class="mode-picker local-payers" role="group" aria-label="选择给分的人"><button v-for="p in game.members" :key="p.id" :class="{ active: payer === p.id }" :aria-pressed="payer === p.id" @click="payer = p.id">{{ p.name }}</button></div>
+              <div v-if="followUp" class="follow-up">
+                <button class="follow-up-main" type="button" @click="giveFollowUp"><span><b>{{ person(followUp.payerId) }}也给 {{ person(followUp.recipientId) }} {{ followUp.points }} 分</b><small>{{ LABELS[followUp.kind] }}是两位输家都给</small></span><em>记上</em></button>
+                <button class="follow-up-close" type="button" aria-label="不用了，只记一位" @click="dismissedPair = followUp.eventId">×</button>
+              </div>
               <div class="score-actions"><button v-for="(label, k, index) in LABELS" :key="k" :class="['score-action', k]" :style="{ '--card-tilt': `${(index - 2) * 3}deg` }" :aria-label="`${selected?.name}给${label} ${game.rules[k]} 分`" @click="choose(k)"><span class="score-card-stack" aria-hidden="true"><span v-for="(card, i) in pointCards(game.rules[k]).slice(0, 3)" :key="i" class="score-card-face" :style="{ '--stack-offset': `${i * 3}px`, zIndex: 3 - i }"><PlayingCard :value="card.value" :face="card.rank" :suit="CARD_SUITS[k]" /></span></span><span class="score-card-label">{{ label }}</span><span class="score-card-amount">−{{ game.rules[k] }} 分</span></button></div>
-              <p class="card-rule-note">{{ game.members.length === 3 ? `每笔都要选收分的球友；大金每位输家给 ${game.rules.dajin} 分，黄金9每位输家给 ${game.rules.golden9} 分，请分别记两笔。` : '犯规给对手；其他牌按赢家的得分支付一份。' }}</p>
+              <p class="card-rule-note">{{ game.members.length === 3 ? `每笔都要选收分的球友；大金每位输家给 ${game.rules.dajin} 分，黄金9每位输家给 ${game.rules.golden9} 分，记完一位会提示补记另一位。` : '犯规给对手；其他牌按赢家的得分支付一份。' }}</p>
               <div class="action-footer"><span>全桌总分 {{ game.members.reduce((sum, p) => sum + p.score, 0) }} · {{ game.startingScores ? '沿用上一场积分' : `每人初始 ${game.initialScore}` }}</span><button class="text-button" :disabled="!last" @click="open('undo')"><svg class="undo-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 14 4.5 9.5 9 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9.5h9a5.5 5.5 0 0 1 0 11h-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>撤销上一笔</button></div>
             </section>
             <section v-else class="finished-panel">
@@ -191,8 +211,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
 .reuse-names { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; margin: 0 0 18px; padding: 12px 16px; border-radius: var(--r-m); background: var(--own); text-align: left; }
 .reuse-names span { font-size: 13px; color: var(--green); font-weight: 600; }
 .reuse-names b { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
-.local-payers { margin: 0 0 20px; }
-.local-payers button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.local-payers { margin: 0 0 14px; }
 .local-save-note { color: var(--faint); text-align: center; font-size: 12px; line-height: 1.7; }
 .local-dialog { position: fixed; inset: 0; margin: auto; border: 0; color: var(--ink); max-height: calc(100dvh - 32px); }
 .local-dialog::backdrop { background: #00000059; backdrop-filter: blur(8px); }

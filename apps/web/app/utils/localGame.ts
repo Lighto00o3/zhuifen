@@ -29,6 +29,21 @@ export function giveLocal(game: LocalGame, actorId: string, kind: ScoreKind, rec
   const event: ScoreEvent = { id: randomId(), kind, actorId, label: LABELS[kind], deltas, createdAt: new Date().toISOString() }
   return { ...game, members: game.members.map(p => ({ ...p, score: p.score + (deltas[p.id] ?? 0) })), events: [...game.events, event] }
 }
+// 三人局的大金、黄金9 是两位输家都给赢家。记完其中一位之后，返回「另一位也给」这一笔，界面上给一个一键补记的提示；
+// 两笔都记了、或者最近一笔不是这种情况时返回 undefined。
+// 单机和联机共用，所以只要求有成员、记录、分值和结束时间这几项。
+export function pendingPair(game: Pick<LocalGame, 'members' | 'events' | 'rules' | 'endedAt'>): { eventId: string; payerId: string; recipientId: string; kind: ScoreKind; points: number } | undefined {
+  if (game.endedAt || game.members.length !== 3) return undefined
+  const active = game.events.filter(e => !e.undoneAt)
+  const last = active.at(-1), previous = active.at(-2)
+  if (!last || (last.kind !== 'dajin' && last.kind !== 'golden9')) return undefined
+  const recipient = game.members.find(p => (last.deltas[p.id] ?? 0) > 0)
+  const other = game.members.find(p => p.id !== last.actorId && p.id !== recipient?.id)
+  if (!recipient || !other) return undefined
+  // 上一笔就是另一位输家给同一个赢家的同一种分：这一对已经记全了
+  if (previous && previous.kind === last.kind && previous.actorId === other.id && (previous.deltas[recipient.id] ?? 0) > 0) return undefined
+  return { eventId: last.id, payerId: other.id, recipientId: recipient.id, kind: last.kind, points: game.rules[last.kind] }
+}
 export function undoLocal(game: LocalGame): LocalGame {
   if (game.endedAt) throw new Error('本场已经结束。')
   const event = game.events.findLast(e => !e.undoneAt)

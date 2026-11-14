@@ -3,7 +3,7 @@ import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { formatElapsed } from '../utils/format'
 import { avatarText, describeEvent, headline, resultStats } from '../utils/result'
 import { randomHex, randomId } from '../utils/random'
-import { loadLocalGames } from '../utils/localGame'
+import { loadLocalGames, pendingPair } from '../utils/localGame'
 import { loadPrefs, savePrefs } from '../utils/prefs'
 import { withStorage } from '../utils/storage'
 import { WAKE_TIMEOUT } from '../utils/api'
@@ -60,6 +60,13 @@ const activeRecent = computed(() => saved.value.slice(0, 3).find(s => recentStat
 const localActive = ref<{ name: string; count: number } | null>(null)
 const RECENT_TEXT = { waiting: '等球友上桌', playing: '正在追分', ended: '已结束', closed: '已关闭' } as const
 useWakeLock(computed(() => room.value?.status === 'playing'))
+// 三人局里别人刚给了赢家大金或黄金9，而我是另一位输家：提示我也给，点一下就记上；点了「不用了」就不再提示这一笔
+const dismissedPair = ref('')
+const followUp = computed(() => {
+  const pair = room.value?.status === 'playing' ? pendingPair(room.value) : undefined
+  return pair && pair.payerId === session.value?.playerId && pair.eventId !== dismissedPair.value ? pair : undefined
+})
+function person(id: string) { return room.value?.members.find(p => p.id === id)?.name ?? '球友' }
 const totalScore = computed(() => room.value?.members.reduce((sum, p) => sum + p.score, 0) ?? 0)
 const modeLabel = computed(() => capacity.value === 2 ? '双人追分' : '三人追分')
 const STATUS_TEXT = { waiting: '等球友上桌', playing: '这一桌，正在追分', ended: '这一场，收杆了', closed: '房间已关闭' } as const
@@ -252,6 +259,10 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
           <section v-if="room.status === 'playing'" class="action-panel">
             <div class="section-label"><h2>我来给分</h2><span>{{ capacity === 2 ? '点一张牌，给对手分' : '点一张牌，再选给谁' }}</span></div>
+            <div v-if="followUp" class="follow-up">
+              <button class="follow-up-main" type="button" :disabled="busy || !connected || !!pending" @click="command({ type: 'score', kind: followUp.kind, recipientId: followUp.recipientId })"><span><b>你也给 {{ person(followUp.recipientId) }} {{ followUp.points }} 分</b><small>{{ LABELS[followUp.kind] }}是两位输家都给</small></span><em>给</em></button>
+              <button class="follow-up-close" type="button" aria-label="不用了" @click="dismissedPair = followUp.eventId">×</button>
+            </div>
             <div class="score-actions">
               <button v-for="(label, kind, index) in LABELS" :key="kind" :class="['score-action', kind]" :style="{ '--card-tilt': `${(index - 2) * 3}deg` }" :aria-label="`${kind === 'foul' ? label : `给${label}`}，${scoreValue(kind)} 分，${scoreHint(kind)}`" :disabled="busy || !connected || !!pending" @click="give(kind)">
                 <span class="score-card-stack" aria-hidden="true">

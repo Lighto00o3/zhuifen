@@ -30,10 +30,18 @@ test('单机三人：开局、犯规和普胜都选收分人、撤销、结束�
   await page.getByRole('dialog').getByRole('button', { name: '确认撤销' }).click()
   await expect(scores).toHaveText(['99分', '100分', '101分'])
 
+  // 乙给甲大金：记完后提示「丙也给甲」，点一下补记第二笔；两笔记全后提示消失。
+  await page.getByRole('button', { name: '乙给大金 10 分' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '给 甲 10 分' }).click()
+  await expect(scores).toHaveText(['109分', '90分', '101分'])
+  await page.getByRole('button', { name: /丙也给 甲 10 分/ }).click()
+  await expect(scores).toHaveText(['119分', '90分', '91分'])
+  await expect(page.locator('.follow-up')).toHaveCount(0)
+
   // 刷新后从本机记录恢复。
   await page.reload()
   await ready(page)
-  await expect(scores).toHaveText(['99分', '100分', '101分'])
+  await expect(scores).toHaveText(['119分', '90分', '91分'])
 
   await page.getByRole('button', { name: '结束本场' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '确认结束' }).click()
@@ -47,8 +55,8 @@ test('单机三人：开局、犯规和普胜都选收分人、撤销、结束�
 
   // 打开这一场：一句话结论、名次；删除后历史里就没有了。
   await game.click()
-  await expect(page.getByRole('heading', { name: '丙赢了 1 分' })).toBeVisible()
-  await expect(page.locator('.rank-name').first()).toContainText('丙')
+  await expect(page.getByRole('heading', { name: '甲赢了 19 分' })).toBeVisible()
+  await expect(page.locator('.rank-name').first()).toContainText('甲')
   await page.getByRole('button', { name: '删除这场' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '确认删除' }).click()
   await expect(page).toHaveURL(/\/history$/)

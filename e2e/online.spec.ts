@@ -179,6 +179,16 @@ test('联机三人：不填昵称自动起名、人到齐自动开局、每笔�
   await second.getByRole('button', { name: '确认撤销' }).click()
   await allScores(['101分', '101分', '98分'])
 
+  // 球友乙给老王大金：另一位输家球友甲的手机上提示「你也给」，点一下就给；给的人和收的人不会看到提示。
+  await second.getByRole('button', { name: /^给大金/ }).click()
+  await dialog(second).getByRole('button', { name: '给 老王 10 分' }).click()
+  await allScores(['101分', '91分', '108分'])
+  await expect(second.locator('.follow-up')).toHaveCount(0)
+  await expect(third.locator('.follow-up')).toHaveCount(0)
+  await first.getByRole('button', { name: /你也给 老王 10 分/ }).click()
+  await allScores(['91分', '91分', '118分'])
+  await expect(first.locator('.follow-up')).toHaveCount(0)
+
   // 房主结束本场，三台手机都看到收杆。
   await first.getByRole('button', { name: '结束本场' }).click()
   await first.getByRole('button', { name: '确认结束' }).click()
@@ -187,13 +197,13 @@ test('联机三人：不填昵称自动起名、人到齐自动开局、每笔�
   // 老王刷新页面：自动回到房间，比分还在。
   await third.reload()
   await ready(third)
-  await expect(scores(third)).toHaveText(['101分', '101分', '98分'])
+  await expect(scores(third)).toHaveText(['91分', '91分', '118分'])
 
   // 历史页里有这一场，默认昵称和比分都对。
   await open(third, '/history')
   const games = third.locator('.history-game')
   await expect(games).toHaveCount(1)
   await expect(games.nth(0)).toContainText('三人测试局')
-  await expect(score(games.nth(0), '球友甲')).toHaveText('101')
-  await expect(score(games.nth(0), '老王')).toHaveText('98')
+  await expect(score(games.nth(0), '球友甲')).toHaveText('91')
+  await expect(score(games.nth(0), '老王')).toHaveText('118')
 })
