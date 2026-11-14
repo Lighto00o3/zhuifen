@@ -3,6 +3,7 @@ import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { formatElapsed } from '../utils/format'
 import { avatarText, describeEvent, headline, resultStats } from '../utils/result'
 import { randomHex, randomId } from '../utils/random'
+import { loadLocalGames } from '../utils/localGame'
 import { WAKE_TIMEOUT } from '../utils/api'
 import { DEFAULT_RULES, LABELS, type PlayerCount, type PublicRoom, type Rules, type ScoreKind, type Session } from '@zhuifen/shared'
 import type { Transfer } from './CardTransfer.vue'
@@ -51,6 +52,8 @@ let joining: { code: string; name: string; token: string; requestId: string } | 
 
 // 最近的房间里还没结束的那一个：首页顶部给一个「回到这一桌」
 const activeRecent = computed(() => saved.value.slice(0, 3).find(s => recentStatus.value[s.code] === 'waiting' || recentStatus.value[s.code] === 'playing'))
+// 单机记分里还没结束的那一场：首页也给一个「继续」
+const localActive = ref<{ name: string; count: number } | null>(null)
 const RECENT_TEXT = { waiting: '等球友上桌', playing: '正在追分', ended: '已结束', closed: '已关闭' } as const
 useWakeLock(computed(() => room.value?.status === 'playing'))
 const totalScore = computed(() => room.value?.members.reduce((sum, p) => sum + p.score, 0) ?? 0)
@@ -146,6 +149,11 @@ onMounted(() => {
   // 免费实例闲置后会休眠：一打开页面就先唤醒服务，填昵称的这段时间里它就在启动了。
   void api('/health', undefined, { timeout: WAKE_TIMEOUT }).catch(() => {})
   loadSaved()
+  try {
+    const store = loadLocalGames(localStorage)
+    const current = store.games.find(g => g.id === store.currentId)
+    if (current && !current.endedAt) localActive.value = { name: current.name, count: current.events.filter(e => !e.undoneAt).length }
+  } catch { /* 本机记录读不出来时不提示，单机页面里会说明 */ }
   const code = typeof route.query.room === 'string' ? route.query.room : undefined
   if (!code) void refreshRecent()
   if (code && /^\d{6}$/.test(code)) {
@@ -182,11 +190,12 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
       <section class="entry-card">
         <div v-if="invited" class="card-heading invite-heading"><span class="eyebrow">球友邀请你上桌</span><h2>加入房间 <b>#{{ roomCode }}</b></h2><p>填个昵称就能加入，不填也可以。</p></div>
         <button v-if="!invited && activeRecent" class="resume-banner" type="button" :disabled="busy" @click="resume(activeRecent)"><i aria-hidden="true" /><span><b>{{ activeRecent.roomName || `房间 #${activeRecent.code}` }}</b><small>{{ activeRecent.roomName ? `#${activeRecent.code} · ` : '' }}{{ RECENT_TEXT[recentStatus[activeRecent.code]!] }}</small></span><em>回到这一桌 ›</em></button>
+        <NuxtLink v-if="!invited && localActive" class="resume-banner" to="/local"><i aria-hidden="true" /><span><b>{{ localActive.name || '单机记分' }}</b><small>单机 · 还没结束 · 已记 {{ localActive.count }} 笔</small></span><em>继续记分 ›</em></NuxtLink>
         <div v-if="!invited" class="card-heading"><h2>和球友开一局</h2><p>各自用手机，同步一场追分。</p></div>
         <div v-if="!invited" class="tabs"><button :aria-pressed="tab === 'create'" :class="{ active: tab === 'create' }" @click="tab = 'create'; error = ''">创建房间</button><button :aria-pressed="tab === 'join'" :class="{ active: tab === 'join' }" @click="tab = 'join'; error = ''">加入房间</button></div>
         <form @submit.prevent="enter">
           <label class="field">你的昵称（选填）<input v-model="nickname" maxlength="12" placeholder="不填就叫「球友甲 / 乙 / 丙」" autocomplete="nickname" /></label>
-          <label v-if="tab === 'join' && !invited" class="field">房间号<input v-model="roomCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="输入球友的 6 位房间号" required /></label>
+          <label v-if="tab === 'join' && !invited" class="field">房间号<input v-model="roomCode" class="code-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 位数字" autocomplete="off" required /></label>
           <template v-else-if="tab === 'create'">
             <label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="例如：周末球友局，留空也可以" /></label>
             <div class="field"><span id="player-count-label">追分人数</span><div class="mode-picker" role="group" aria-labelledby="player-count-label"><button type="button" :aria-pressed="playerCount === 2" :class="{ active: playerCount === 2 }" @click="playerCount = 2">双人追分</button><button type="button" :aria-pressed="playerCount === 3" :class="{ active: playerCount === 3 }" @click="playerCount = 3">三人追分</button></div></div>
@@ -242,7 +251,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
               </button>
             </div>
             <p class="card-rule-note">{{ capacity === 2 ? '犯规直接给对手，其他牌按赢家的得分支付。' : `每笔都要选收分的球友；大金每人给 ${room.rules.dajin} 分，黄金9每人给 ${room.rules.golden9} 分（共 ${room.rules.golden9 * 2} 分）。` }}</p>
-            <div class="action-footer"><span>全桌总分 {{ totalScore }} · 每人初始 {{ room.initialScore }}</span><button class="text-button" :disabled="!canUndo || busy || !connected || !!pending" @click="confirmation = 'undo'">↶ 撤销上一笔</button></div>
+            <div class="action-footer"><span>全桌总分 {{ totalScore }} · 每人初始 {{ room.initialScore }}</span><button class="text-button" :disabled="!canUndo || busy || !connected || !!pending" @click="confirmation = 'undo'"><svg class="undo-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 14 4.5 9.5 9 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9.5h9a5.5 5.5 0 0 1 0 11h-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>撤销上一笔</button></div>
           </section>
 
           <!-- 人到齐会自动开局；只有升级前就已经坐满、还在等房主开局的房间才会走到这里 -->
