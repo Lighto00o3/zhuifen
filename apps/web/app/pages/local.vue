@@ -5,6 +5,8 @@ import { CARD_SUITS, pointCards } from '../utils/pointCards'
 import { formatElapsed } from '../utils/format'
 import { avatarText, describeEvent, headline, resultStats } from '../utils/result'
 import { randomId } from '../utils/random'
+import { loadPrefs, savePrefs } from '../utils/prefs'
+import { withStorage } from '../utils/storage'
 import type { Transfer } from '../components/CardTransfer.vue'
 
 useHead({ title: '单机记分 · 追分' })
@@ -17,6 +19,13 @@ const ready = ref(false)
 const count = ref<2 | 3>(3)
 const names = ref(['', '', ''])
 const title = ref('')
+// 上次单机填的球友，开新桌时可以一键沿用
+const lastNames = ref<string[]>([])
+const lastNamesText = computed(() => lastNames.value.map((name, index) => name || DEFAULT_NAMES[index]).join('、'))
+function reuseNames() {
+  count.value = lastNames.value.length as 2 | 3
+  names.value = [...lastNames.value, '', ''].slice(0, 3)
+}
 const initial = ref(100)
 const rules = reactive<Rules>({ ...DEFAULT_RULES })
 const payer = ref('')
@@ -46,8 +55,13 @@ function save(next: LocalGame) {
   tick()
 }
 function start() {
-  try { save(createLocalGame(names.value.slice(0, count.value), title.value, initial.value, rules)); payer.value = game.value!.members[0]!.id; if (fresh.value) void navigateTo('/local') }
-  catch (e) { error.value = e instanceof Error ? e.message : '无法保存，请检查浏览器的存储空间。' }
+  try {
+    const typed = names.value.slice(0, count.value).map(n => n.trim())
+    save(createLocalGame(typed, title.value, initial.value, rules))
+    if (typed.some(Boolean)) withStorage(storage => savePrefs(storage, { localNames: typed }))
+    payer.value = game.value!.members[0]!.id
+    if (fresh.value) void navigateTo('/local')
+  } catch (e) { error.value = e instanceof Error ? e.message : '无法保存，请检查浏览器的存储空间。' }
 }
 function close() { dialog.value?.close(); action.value = null }
 async function open(next: NonNullable<typeof action.value>) {
@@ -99,7 +113,7 @@ function restore() {
   } catch { storageError.value = '本机记录无法读取。原记录仍保留，请勿清除浏览器数据。' }
 }
 function storageChanged(e: StorageEvent) { if (e.key === LOCAL_GAME_KEY || e.key === LOCAL_GAMES_KEY) { close(); restore() } }
-onMounted(() => { restore(); ready.value = true; timer = setInterval(tick, 1000); window.addEventListener('storage', storageChanged) })
+onMounted(() => { restore(); lastNames.value = withStorage(loadPrefs)?.localNames ?? []; ready.value = true; timer = setInterval(tick, 1000); window.addEventListener('storage', storageChanged) })
 onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storage', storageChanged) })
 </script>
 
@@ -116,6 +130,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
         <div class="card-heading"><h1>一台手机，<br />也能开一桌。</h1><p>昵称可以不填。记分时先选谁给分，再点牌。</p></div>
         <form @submit.prevent="start">
           <div class="field"><span>追分人数</span><div class="mode-picker"><button v-for="n in ([2, 3] as const)" :key="n" type="button" :class="{ active: count === n }" :aria-pressed="count === n" @click="count = n">{{ n === 2 ? '双人追分' : '三人追分' }}</button></div></div>
+          <button v-if="lastNames.length && names.every(n => !n)" class="reuse-names" type="button" @click="reuseNames"><span>沿用上次的球友</span><b>{{ lastNamesText }}</b></button>
           <label v-for="n in count" :key="n" class="field">第 {{ n }} 位球友（选填）<input v-model="names[n - 1]" :placeholder="`不填就叫「${DEFAULT_NAMES[n - 1]}」`" maxlength="12" /></label>
           <label class="field">本场名称（选填）<input v-model="title" placeholder="例如：周末练球" maxlength="24" /></label>
           <label class="field">每人初始积分<div class="input-unit"><input v-model.number="initial" type="number" min="1" max="10000" required /><span>分</span></div></label>
@@ -135,7 +150,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
             <div class="players" :class="{ duel: game.members.length === 2 }">
               <article v-for="(p, index) in game.members" :key="p.id" :data-player-id="p.id" class="player-card" :class="{ mine: !game.endedAt && p.id === payer }">
                 <div class="player-top"><span class="avatar" :class="`color-${index}`">{{ avatarText(p.name, game.members) }}</span><div><h3>{{ p.name }}</h3></div></div>
-                <div class="score-number" :class="{ compact: String(p.score).length > 4 }"><AnimatedNumber :value="p.score" /><span>分</span></div>
+                <div class="score-number" :class="{ medium: String(p.score).length === 4, compact: String(p.score).length > 4 }"><AnimatedNumber :value="p.score" /><span>分</span></div>
                 <div class="player-bottom"><span class="delta-chip" :class="{ positive: delta(p) > 0, negative: delta(p) < 0 }">本场 {{ delta(p) > 0 ? '+' : '' }}{{ delta(p) }}</span></div>
               </article>
             </div>
@@ -173,6 +188,9 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
 .local-setup { max-width: 520px; margin: 8px auto 0; }
 .local-setup h1 { font-size: 32px; line-height: 1.2; margin: 0 0 10px; }
 .local-setup form { margin-top: 24px; }
+.reuse-names { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; margin: 0 0 18px; padding: 12px 16px; border-radius: var(--r-m); background: var(--own); text-align: left; }
+.reuse-names span { font-size: 13px; color: var(--green); font-weight: 600; }
+.reuse-names b { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .local-payers { margin: 0 0 20px; }
 .local-payers button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .local-save-note { color: var(--faint); text-align: center; font-size: 12px; line-height: 1.7; }

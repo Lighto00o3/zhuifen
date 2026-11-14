@@ -106,6 +106,8 @@ test('联机双人：创建房间、扫码加入后自动开局、实时记分�
   // 回到首页，最近的房间里有这个房间。
   await open(guest, '/')
   await expect(guest.locator('.recent')).toContainText('端到端测试局')
+  // 上次填的昵称还在，不用重填。
+  await expect(guest.getByLabel('你的昵称')).toHaveValue('乙')
 })
 
 test('联机三人：不填昵称自动起名、人到齐自动开局、每笔给分（包括犯规）都选收分人、撤销、结束、历史页', async ({ browser }) => {

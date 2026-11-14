@@ -4,6 +4,8 @@ import { formatElapsed } from '../utils/format'
 import { avatarText, describeEvent, headline, resultStats } from '../utils/result'
 import { randomHex, randomId } from '../utils/random'
 import { loadLocalGames } from '../utils/localGame'
+import { loadPrefs, savePrefs } from '../utils/prefs'
+import { withStorage } from '../utils/storage'
 import { WAKE_TIMEOUT } from '../utils/api'
 import { DEFAULT_RULES, LABELS, type PlayerCount, type PublicRoom, type Rules, type ScoreKind, type Session } from '@zhuifen/shared'
 import type { Transfer } from './CardTransfer.vue'
@@ -38,6 +40,8 @@ const invited = ref(false)
 const entering = ref(route.path === '/room')
 const initialScore = ref(100)
 const playerCount = ref<PlayerCount>(3)
+// 用户自己点过人数后，不再用上次的选择覆盖
+const playerTouched = ref(false)
 const rules = reactive<Rules>({ ...DEFAULT_RULES })
 const settingsOpen = ref(false)
 const elapsed = ref('00:00')
@@ -89,6 +93,9 @@ async function enter() {
       }
       result = await track(() => api(`/rooms/${roomCode.value}/join`, joining, { timeout: WAKE_TIMEOUT }))
     }
+    // 记住这次填的昵称和人数，下次不用重填
+    const creating = tab.value === 'create'
+    withStorage(storage => savePrefs(storage, { nickname: nickname.value.trim(), ...(creating ? { playerCount: playerCount.value } : {}) }))
     enterRoom(result)
     await navigateTo({ path: '/room', query: { room: result.session.code } })
   } catch (e) { error.value = (e as Error).message }
@@ -149,6 +156,10 @@ onMounted(() => {
   // 免费实例闲置后会休眠：一打开页面就先唤醒服务，填昵称的这段时间里它就在启动了。
   void api('/health', undefined, { timeout: WAKE_TIMEOUT }).catch(() => {})
   loadSaved()
+  // 填上上次用的昵称和人数；用户已经开始填了（页面还没完全加载好就在输入）就不覆盖
+  const prefs = withStorage(loadPrefs) ?? {}
+  if (prefs.nickname && !nickname.value) nickname.value = prefs.nickname
+  if (prefs.playerCount && !playerTouched.value) playerCount.value = prefs.playerCount
   try {
     const store = loadLocalGames(localStorage)
     const current = store.games.find(g => g.id === store.currentId)
@@ -198,7 +209,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
           <label v-if="tab === 'join' && !invited" class="field">房间号<input v-model="roomCode" class="code-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 位数字" autocomplete="off" required /></label>
           <template v-else-if="tab === 'create'">
             <label class="field">房间名（选填）<input v-model="roomName" maxlength="24" placeholder="例如：周末球友局，留空也可以" /></label>
-            <div class="field"><span id="player-count-label">追分人数</span><div class="mode-picker" role="group" aria-labelledby="player-count-label"><button type="button" :aria-pressed="playerCount === 2" :class="{ active: playerCount === 2 }" @click="playerCount = 2">双人追分</button><button type="button" :aria-pressed="playerCount === 3" :class="{ active: playerCount === 3 }" @click="playerCount = 3">三人追分</button></div></div>
+            <div class="field"><span id="player-count-label">追分人数</span><div class="mode-picker" role="group" aria-labelledby="player-count-label"><button type="button" :aria-pressed="playerCount === 2" :class="{ active: playerCount === 2 }" @click="playerCount = 2; playerTouched = true">双人追分</button><button type="button" :aria-pressed="playerCount === 3" :class="{ active: playerCount === 3 }" @click="playerCount = 3; playerTouched = true">三人追分</button></div></div>
             <DisclosurePanel class="entry-settings"><template #title>初始积分 <b>{{ initialScore }} 分</b></template><label class="field">每人初始积分<div class="input-unit"><input v-model.number="initialScore" type="number" min="1" max="10000" required /><span>分</span></div></label><p>其他分值可在球友到齐前由房主设置，到齐后自动开局。</p></DisclosurePanel>
           </template>
           <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -233,7 +244,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
           <div class="players" :class="{ duel: capacity === 2 }">
             <article v-for="(player, index) in room.members" :key="player.id" :data-player-id="player.id" class="player-card" :class="{ mine: player.id === session?.playerId }">
               <div class="player-top"><span class="avatar" :class="`color-${index}`">{{ avatarText(player.name, room.members) }}</span><div><h3>{{ player.name }}<span v-if="player.id === session?.playerId" class="you">我</span></h3><span class="presence" :class="{ online: player.online }"><i />{{ player.online ? '在线' : '离线' }}<span v-if="player.id === room.hostId"> · 房主</span></span></div></div>
-              <div class="score-number" :class="{ compact: String(player.score).length > 4 }"><AnimatedNumber :value="player.score" /><span>分</span></div>
+              <div class="score-number" :class="{ medium: String(player.score).length === 4, compact: String(player.score).length > 4 }"><AnimatedNumber :value="player.score" /><span>分</span></div>
               <div class="player-bottom"><span class="delta-chip" :class="{ positive: delta(player) > 0, negative: delta(player) < 0 }">本场 {{ delta(player) > 0 ? '+' : '' }}{{ delta(player) }}</span></div>
             </article>
             <template v-if="room.status === 'waiting'"><div v-for="n in capacity - room.members.length" :key="`empty-${n}`" class="player-card empty-seat"><span class="empty-icon" aria-hidden="true">＋</span><span class="empty-seat-title">等球友加入</span><span class="empty-seat-copy">扫码就能上桌</span></div></template>

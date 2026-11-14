@@ -73,4 +73,11 @@ test('单机不填昵称：自动叫球友甲、乙、丙，填了的保留；�
   await expect(page.getByRole('dialog').getByRole('button', { name: /^给 / }).nth(0)).toHaveAccessibleName('给 球友乙 1 分')
   await page.getByRole('dialog').getByRole('button', { name: '给 球友乙 1 分' }).click()
   await expect(page.locator('.score-number')).toHaveText(['99分', '101分'])
+
+  // 再开新桌：一键沿用上次填过的球友（第一桌只填了第二位）。
+  await open(page, '/local?new=1')
+  await page.getByRole('button', { name: /沿用上次的球友/ }).click()
+  await expect(page.getByLabel('第 2 位球友')).toHaveValue('老王')
+  await page.getByRole('button', { name: '开始单机记分' }).click()
+  await expect(page.locator('.player-card h3')).toHaveText(['球友甲', '老王', '球友乙'])
 })
