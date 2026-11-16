@@ -120,6 +120,7 @@ i { display: inline-block; width: 7px; height: 7px; flex-shrink: 0; border-radiu
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } }
 .site-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 72px; }
 .header-actions { display: flex; align-items: center; gap: 14px; }
+.voice-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 4px 0 12px; color: var(--muted); font-size: 12px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-size: 22px; font-weight: 700; letter-spacing: -.03em; }
 .brand-ball { position: relative; isolation: isolate; display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; overflow: hidden; border-radius: 50%; background: linear-gradient(178deg, #fff 0%, #f5f4ef 23%, #f4c827 25%, #efb600 74%, #eeede6 76%, #fff 100%); box-shadow: inset -3px -4px 7px #58451c28, inset 2px 2px 5px #ffffffbf, 0 2px 5px #1d1d1f1f; }
 .brand-ball::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(circle at 29% 23%, #ffffffb3, transparent 43%); pointer-events: none; }

@@ -4,6 +4,7 @@ import { createApi, credentialGone, errorStatus, WAKE_TIMEOUT } from '../utils/a
 import { cacheOnlineGames } from '../utils/gameHistory'
 import { randomId } from '../utils/random'
 import { roomChanges } from '../utils/roomChanges'
+import { scoreVoiceChanges } from '../utils/scoreVoice'
 import { addSession, forgetSessions, loadSessions, pendingKey, storeSessions } from '../utils/sessions'
 import { withStorage } from '../utils/storage'
 import { createSubscription, type SubscribeResponse } from '../utils/subscription'
@@ -12,7 +13,7 @@ type Changes = ReturnType<typeof roomChanges>
 
 // 联机房间的状态、实时连接和命令队列。
 // 每次记分先存进 pending，请求成功后才清掉；断线或 5xx 时可以用同一个 requestId 重试，不会重复记分。
-export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState?: (state: PublicRoom) => void } = {}) {
+export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onVoice?: (changes: ReturnType<typeof scoreVoiceChanges>) => void; onState?: (state: PublicRoom) => void } = {}) {
   const apiOrigin = useRuntimeConfig().public.apiOrigin.replace(/\/$/, '')
   const request = createApi(apiOrigin)
   const room = ref<PublicRoom | null>(null)
@@ -57,6 +58,7 @@ export function useRoom(hooks: { onChanges?: (changes: Changes) => void; onState
     room.value = state
     rememberRoomName(state.code, state.roomName)
     hooks.onChanges?.(changes)
+    hooks.onVoice?.(scoreVoiceChanges(before, state, session.value?.playerId))
     hooks.onState?.(state)
   }
   function rememberRoomName(code: string, title?: string) {

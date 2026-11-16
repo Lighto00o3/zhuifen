@@ -9,6 +9,8 @@ export interface Prefs {
   playerCount?: 2 | 3
   // 单机模式上次填的球友昵称，按座位顺序；没填的座位是空串
   localNames?: string[]
+  // 这台设备是否开启得分语音
+  scoreVoice?: boolean
 }
 export const PREFS_KEY = 'zhuifen:prefs:v1'
 
@@ -23,6 +25,7 @@ export function loadPrefs(storage: ReadStorage): Prefs {
     if (validName(value.nickname) && value.nickname) prefs.nickname = value.nickname
     if (value.playerCount === 2 || value.playerCount === 3) prefs.playerCount = value.playerCount
     if (Array.isArray(value.localNames) && [2, 3].includes(value.localNames.length) && value.localNames.every(validName) && value.localNames.some(Boolean)) prefs.localNames = value.localNames
+    if (typeof value.scoreVoice === 'boolean') prefs.scoreVoice = value.scoreVoice
     return prefs
   } catch { return {} }
 }

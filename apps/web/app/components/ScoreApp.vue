@@ -13,6 +13,7 @@ import type { ScoreNotice } from '../utils/roomChanges'
 import type { ConfirmAction } from './ConfirmDialog.vue'
 
 const route = useRoute()
+const voice = useScoreVoice()
 const { slow: waking, track } = useSlowHint()
 const transfers = ref<{ enqueue: (transfer: Transfer) => void } | null>(null)
 const notices = ref<{ push: (notice: ScoreNotice) => void } | null>(null)
@@ -25,6 +26,10 @@ const {
     // 有人给我分、或者我给出去的分记上了，手机轻轻震一下（安卓支持，苹果没有这个接口）
     if (changes.transfers.some(t => t.to === t.mine || t.from === t.mine)) try { navigator.vibrate?.(30) } catch { /* 不支持就算了 */ }
     changes.notices.forEach(n => notices.value?.push(n))
+  },
+  onVoice(changes) {
+    changes.revoked.forEach(voice.revoke)
+    changes.notices.forEach(voice.enqueue)
   },
   // 等待开局时同步房间设置；房主正在编辑设置时不覆盖他填的内容。
   onState(state) { if (state.status === 'waiting' && !(settingsOpen.value && isHost.value)) restoreSettings() },
@@ -50,7 +55,8 @@ const confirmation = ref<ConfirmAction | null>(null)
 const carry = ref(false)
 const modalOpen = computed(() => settingsOpen.value || !!giving.value || !!confirmation.value)
 useModalFocus(modalOpen, () => { closeSettings(); giving.value = null; confirmation.value = null })
-watch(() => room.value?.status, status => { if (status !== 'playing') giving.value = null; if (status !== 'waiting') closeSettings() })
+watch(() => room.value?.status, status => { if (status !== 'playing') { giving.value = null; voice.clear() } if (status !== 'waiting') closeSettings() })
+watch(() => room.value?.roundId, () => voice.clear())
 let timer: ReturnType<typeof setInterval> | undefined
 let joining: { code: string; name: string; token: string; requestId: string } | undefined
 
@@ -196,6 +202,8 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
       <div class="header-actions"><span v-if="room" class="connection" :class="{ offline: !connected }"><i />{{ connected ? '实时同步中' : '正在重新连接' }}</span>
       <span v-else class="header-note">双人 / 三人追分</span><ThemeToggle /></div>
     </header>
+
+    <div v-if="room" class="voice-controls" :inert="modalOpen"><span>只播报自己的得分类型</span><ScoreVoiceToggle :supported="voice.supported.value" :enabled="voice.enabled.value" :ready="voice.ready.value" :error="voice.error.value" @toggle="voice.toggle" @test="voice.test" /></div>
 
     <main v-if="!room && entering" class="entering"><p class="muted" role="status">正在进入房间…</p></main>
     <main v-else-if="!room" class="landing" :class="{ invited }" :inert="modalOpen">

@@ -8,9 +8,11 @@ import { randomId } from '../utils/random'
 import { loadPrefs, savePrefs } from '../utils/prefs'
 import { withStorage } from '../utils/storage'
 import type { Transfer } from '../components/CardTransfer.vue'
+import { scoreVoiceNotice } from '../utils/scoreVoice'
 
 useHead({ title: '单机记分 · 追分' })
 const route = useRoute()
+const voice = useScoreVoice()
 const historical = computed(() => typeof route.query.id === 'string')
 const fresh = computed(() => route.query.new === '1')
 const game = ref<LocalGame | null>(null)
@@ -78,6 +80,8 @@ function give(recipientId: string) {
     save(next)
     close()
     animate(next.events.at(-1)!.deltas, false)
+    const notice = scoreVoiceNotice(next.events.at(-1)!)
+    if (notice) voice.enqueue(notice)
   } catch (e) { error.value = e instanceof Error ? e.message : '记分失败，请重试。' }
 }
 function animate(deltas: Record<string, number>, undo: boolean) {
@@ -99,6 +103,8 @@ function giveFollowUp() {
     save(next)
     kind.value = pair.kind
     animate(next.events.at(-1)!.deltas, false)
+    const notice = scoreVoiceNotice(next.events.at(-1)!)
+    if (notice) voice.enqueue(notice)
   } catch (e) { error.value = e instanceof Error ? e.message : '记分失败，请重试。' }
 }
 function confirm() {
@@ -107,9 +113,11 @@ function confirm() {
     if (action.value === 'undo' && last.value) {
       const event = last.value
       save(undoLocal(game.value)); kind.value = event.kind; animate(event.deltas, true)
-    } else if (action.value === 'end') save({ ...game.value, endedAt: new Date().toISOString() })
+      voice.revoke(event.id)
+    } else if (action.value === 'end') { save({ ...game.value, endedAt: new Date().toISOString() }); voice.clear() }
     else if (action.value === 'new') {
       save(rematchLocal(game.value, carry.value))
+      voice.clear()
       payer.value = game.value!.members[0]!.id
     }
     close()
@@ -128,7 +136,7 @@ function restore() {
     tick()
   } catch { storageError.value = '本机记录无法读取。原记录仍保留，请勿清除浏览器数据。' }
 }
-function storageChanged(e: StorageEvent) { if (e.key === LOCAL_GAME_KEY || e.key === LOCAL_GAMES_KEY) { close(); restore() } }
+function storageChanged(e: StorageEvent) { if (e.key === LOCAL_GAME_KEY || e.key === LOCAL_GAMES_KEY) { voice.clear(); close(); restore() } }
 onMounted(() => { restore(); lastNames.value = withStorage(loadPrefs)?.localNames ?? []; ready.value = true; timer = setInterval(tick, 1000); window.addEventListener('storage', storageChanged) })
 onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storage', storageChanged) })
 </script>
@@ -137,6 +145,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('storag
   <div class="app-shell local-page">
     <CardTransfer ref="transfers" />
     <header class="site-header"><NuxtLink class="brand" to="/"><span class="brand-ball" aria-hidden="true"><span>9</span></span>追分<span class="brand-sub">一台手机，记好一桌</span></NuxtLink><div class="header-actions"><ThemeToggle /></div></header>
+    <div v-if="game && !historical && !game.endedAt" class="voice-controls"><span>只播报得分类型</span><ScoreVoiceToggle :supported="voice.supported.value" :enabled="voice.enabled.value" :ready="voice.ready.value" :error="voice.error.value" @toggle="voice.toggle" @test="voice.test" /></div>
     <main class="room-page">
       <div class="room-toolbar"><NuxtLink class="pill home-button" to="/"><span aria-hidden="true">‹</span>首页</NuxtLink><span class="spacer" /><NuxtLink class="pill" to="/history">历史对局</NuxtLink><button v-if="game && !game.endedAt && !historical" class="pill danger-button" @click="open('end')">结束本场</button></div>
       <p v-if="storageError" class="error" role="alert">{{ storageError }}</p>
